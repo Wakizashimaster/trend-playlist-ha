@@ -132,6 +132,34 @@ def main(preview=False):
     if previous.get("playlist_name") == "UK Trends":
         print("Migrating saved baseline name to Down with the Kids after live verification", flush=True)
     verify_live_baseline(previous["track_ids"])
+    if preview:
+        # Capture verified live metadata for human-readable removal review.
+        # Failure is non-fatal; never write to the remote playlist.
+        try:
+            import tidalapi
+            session = tidalapi.Session()
+            if not session.login_session_file(tp.SESSION_FILE):
+                raise RuntimeError("TIDAL session unavailable")
+            matches = [p for p in session.user.playlists() if str(p.id) == PLAYLIST_ID]
+            if len(matches) != 1:
+                raise RuntimeError("Playlist identity ambiguous")
+            tracks = []
+            for offset in range(0, 10000, 100):
+                batch = matches[0].tracks(limit=100, offset=offset)
+                if not isinstance(batch, list):
+                    raise RuntimeError("Playlist page unavailable")
+                for track in batch:
+                    artist = getattr(getattr(track, "artist", None), "name", "")
+                    tracks.append({"tidal_id": str(track.id), "artist": artist, "title": track.name})
+                if len(batch) < 100:
+                    break
+            if [x["tidal_id"] for x in tracks] != [str(x) for x in previous["track_ids"]]:
+                raise RuntimeError("Live metadata differs from verified baseline")
+            (tp.DATA / "phone_baseline_tracks.json").write_text(json.dumps(
+                {"track_ids": previous["track_ids"], "tracks": tracks}, indent=2), encoding="utf-8")
+        except Exception as exc:
+            print(f"warning: removal names unavailable: {exc}", flush=True)
+            (tp.DATA / "phone_baseline_tracks.json").unlink(missing_ok=True)
     if previous["playlist_name"] == "UK Trends":
         previous["playlist_name"] = "Down with the Kids"
         if not preview:
