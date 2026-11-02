@@ -7,7 +7,7 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = ["sensor", "button"]
+PLATFORMS = ["sensor", "button", "select"]
 
 async def async_setup_entry(hass, entry):
     session = async_get_clientsession(hass)
