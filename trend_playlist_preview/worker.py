@@ -43,6 +43,38 @@ def run_preview():
         lock.release()
     return True
 
+def build_review():
+    """Read-only, named changes from the latest successful preview."""
+    import csv
+    def rows(filename):
+        path = DATA / filename
+        if not path.exists():
+            return []
+        with path.open(encoding="utf-8-sig", newline="") as stream:
+            return list(csv.DictReader(stream))
+    if state.get("running") or state.get("ok") is not True:
+        return {"ready": False, "reason": "No completed successful preview"}
+    baseline = json.loads((DATA / "auto_refresh_state.json").read_text())
+    original = [str(x) for x in baseline["track_ids"]]
+    matches = rows("match_report.csv")
+    if not matches or any(row.get("status") != "matched" for row in matches):
+        return {"ready": False, "reason": "Matching report incomplete"}
+    proposed = [row["tidal_id"] for row in matches]
+    if len(proposed) != len(set(proposed)):
+        return {"ready": False, "reason": "Duplicate TIDAL IDs"}
+    old, new = set(original), set(proposed)
+    named = lambda row: {"artist": row["artist"], "title": row["title"], "tidal_id": row["tidal_id"]}
+    return {"ready": True, "last_run": state["last_run"],
+            "playlist_name": "Down with the Kids", "target": 50,
+            "proposed_count": len(proposed),
+            "additions": [named(r) for r in matches if r["tidal_id"] not in old],
+            "removals": [{"tidal_id": x} for x in original if x not in new],
+            "unchanged": len(old & new),
+            "review_candidates": [{"artist": r["artist"], "title": r["title"],
+                                   "release_status": r.get("release_status", "")}
+                                  for r in rows("review.csv")],
+            "publish_enabled": False}
+
 def scheduler():
     last_day = None
     while True:
@@ -71,6 +103,11 @@ class Handler(BaseHTTPRequestHandler):
             return self.respond(401, {"error": "unauthorized"})
         if self.path == "/status":
             return self.respond(200, dict(state))
+        if self.path == "/review":
+            try:
+                return self.respond(200, build_review())
+            except (OSError, ValueError, KeyError) as exc:
+                return self.respond(503, {"ready": False, "reason": str(exc)})
         return self.respond(404, {"error": "not found"})
     def do_POST(self):
         if not self.authorized():
