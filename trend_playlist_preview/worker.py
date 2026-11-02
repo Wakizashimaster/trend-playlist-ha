@@ -31,6 +31,7 @@ def run_preview():
     if not lock.acquire(blocking=False):
         return False
     state["running"] = True
+    (DATA / "phone_candidate_pool.csv").unlink(missing_ok=True)
     try:
         result = subprocess.run([sys.executable, str(ROOT / "auto_refresh.py"), "--preview"],
             cwd=ROOT, env=os.environ.copy(), capture_output=True, text=True, timeout=7200)
@@ -64,6 +65,11 @@ def build_review():
     if len(proposed) != len(set(proposed)):
         return {"ready": False, "reason": "Duplicate TIDAL IDs"}
     old, new = set(original), set(proposed)
+    pool = rows("phone_candidate_pool.csv")
+    pool_ids = [r["tidal_id"] for r in pool if r.get("tidal_id")]
+    if not pool or pool_ids[:len(proposed)] != proposed:
+        return {"ready": False, "reason": "Reserve pool missing or mismatched; rerun preview"}
+
     named = lambda row: {"artist": row["artist"], "title": row["title"], "tidal_id": row["tidal_id"]}
     proposal_id = hashlib.sha256(json.dumps({"run": state["last_run"], "old": original, "new": proposed}, sort_keys=True).encode()).hexdigest()[:20]
     try:
@@ -71,7 +77,22 @@ def build_review():
     except (OSError, ValueError):
         saved = {}
     decisions = saved.get("decisions", {}) if saved.get("proposal_id") == proposal_id else {}
+    excluded = {tid for tid, action in decisions.items() if action in ("exclude", "block")}
+    revised = []
+    seen = set()
+    for row in pool:
+        tid = row["tidal_id"]
+        if tid not in excluded and tid not in seen:
+            revised.append(row)
+            seen.add(tid)
+        if len(revised) == 50:
+            break
+    revised_ids = {r["tidal_id"] for r in revised}
     return {"ready": True, "proposal_id": proposal_id, "decisions": decisions,
+            "revised_count": len(revised),
+            "revised_additions": [named(r) for r in revised if r["tidal_id"] not in old],
+            "revised_removals": [{"tidal_id": x} for x in original if x not in revised_ids],
+            "replacement_count": sum(r["tidal_id"] not in proposed for r in revised),
             "last_run": state["last_run"],
             "playlist_name": "Down with the Kids", "target": 50,
             "proposed_count": len(proposed),
