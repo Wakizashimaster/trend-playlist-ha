@@ -103,11 +103,13 @@ def build_review():
     zeitgeist = [named(r) for r in pool if decisions.get(r["tidal_id"]) == "zeitgeist"]
     # Zeitgeist intent is independent of the main playlist's revised inclusion.
 
-    plan_hash = hashlib.sha256(json.dumps([r["tidal_id"] for r in revised]).encode()).hexdigest()[:20]
+    revised_track_ids = [r["tidal_id"] for r in revised]
+    plan_hash = hashlib.sha256(json.dumps(revised_track_ids).encode()).hexdigest()[:20]
     approval = saved.get("approval", {}) if saved.get("proposal_id") == proposal_id else {}
     approved = approval.get("plan_hash") == plan_hash
     return {"ready": True, "proposal_id": proposal_id, "decisions": decisions,
             "plan_hash": plan_hash, "approval_recorded": approved,
+            "revised_track_ids": revised_track_ids,
             "zeitgeist_pending": zeitgeist,
             "approval_mode": approval.get("mode") if approved else None,
             "revised_count": len(revised),
@@ -212,6 +214,7 @@ class Handler(BaseHTTPRequestHandler):
                 path = DATA / "phone_review.json"
                 record = {"proposal_id": review["proposal_id"], "decisions": review["decisions"],
                           "approval": {"plan_hash": review["plan_hash"], "mode": mode,
+                                       "track_ids": review["revised_track_ids"],
                                        "recorded_at": datetime.now(ZoneInfo("Europe/London")).isoformat(),
                                        "publish_enabled": False}}
                 tmp = path.with_suffix(".tmp")
