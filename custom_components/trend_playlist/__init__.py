@@ -16,7 +16,15 @@ async def async_setup_entry(hass, entry):
             async with session.get(entry.data["url"] + "/status",
                 headers={"Authorization": "Bearer " + entry.data["token"]}, timeout=15) as response:
                 response.raise_for_status()
-                return await response.json()
+                status = await response.json()
+            try:
+                async with session.get(entry.data["url"] + "/review",
+                    headers={"Authorization": "Bearer " + entry.data["token"]}, timeout=15) as review_response:
+                    if review_response.status == 200:
+                        status["review"] = await review_response.json()
+            except Exception as exc:
+                _LOGGER.debug("Review endpoint unavailable: %s", exc)
+            return status
         except Exception as exc:
             raise UpdateFailed(str(exc)) from exc
     coordinator = DataUpdateCoordinator(hass, _LOGGER, name="Trend Playlist",
