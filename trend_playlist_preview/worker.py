@@ -78,8 +78,9 @@ def build_review():
         saved = {}
     decisions = saved.get("decisions", {}) if saved.get("proposal_id") == proposal_id else {}
     excluded = {tid for tid, action in decisions.items() if action in ("exclude", "block")}
-    revised = []
-    seen = set()
+    retained = {tid for tid, action in decisions.items() if action == "retain" and tid in old and tid not in new}
+    revised = [{"tidal_id": tid, "artist": "", "title": ""} for tid in original if tid in retained]
+    seen = set(retained)
     for row in pool:
         tid = row["tidal_id"]
         if tid not in excluded and tid not in seen:
@@ -88,7 +89,12 @@ def build_review():
         if len(revised) == 50:
             break
     revised_ids = {r["tidal_id"] for r in revised}
+    plan_hash = hashlib.sha256(json.dumps([r["tidal_id"] for r in revised]).encode()).hexdigest()[:20]
+    approval = saved.get("approval", {}) if saved.get("proposal_id") == proposal_id else {}
+    approved = approval.get("plan_hash") == plan_hash
     return {"ready": True, "proposal_id": proposal_id, "decisions": decisions,
+            "plan_hash": plan_hash, "approval_recorded": approved,
+            "approval_mode": approval.get("mode") if approved else None,
             "revised_count": len(revised),
             "revised_additions": [named(r) for r in revised if r["tidal_id"] not in old],
             "revised_removals": [{"tidal_id": x} for x in original if x not in revised_ids],
@@ -154,10 +160,13 @@ class Handler(BaseHTTPRequestHandler):
                     return self.respond(409, {"error": "stale proposal"})
                 tid = str(payload.get("tidal_id", ""))
                 action = payload.get("action")
-                if tid not in {r["tidal_id"] for r in review["additions"]} or action not in ("keep", "exclude", "zeitgeist", "block"):
+                additions = {r["tidal_id"] for r in review["additions"]}
+                removals = {r["tidal_id"] for r in review["removals"]}
+                if not ((tid in additions and action in ("keep", "exclude", "zeitgeist", "block")) or
+                        (tid in removals and action in ("retain", "remove"))):
                     return self.respond(400, {"error": "invalid selection"})
                 decisions = dict(review["decisions"])
-                if action == "keep":
+                if action in ("keep", "remove"):
                     decisions.pop(tid, None)
                 else:
                     decisions[tid] = action
