@@ -379,11 +379,21 @@ def gather_sources(args) -> dict[str, list[tuple[str, str]]]:
 
 # ----------------------------------------------------------------------- scoring
 def build_candidates(sources: dict[str, list[tuple[str, str]]]) -> dict[str, dict]:
+    # Some chart scrapes prefix a re-entry with "RE " (e.g. "RE ANGEL OF MY DREAMS").
+    # Drop that *row* only when the same artist has an unprefixed counterpart
+    # somewhere in the collected sources. Do not strip legitimate RE-prefixed titles.
+    plain = {track_identity(artist, title)
+             for pairs in sources.values() for artist, title in pairs
+             if not re.match(r"(?i)^RE\\s+", title.strip())}
     cands: dict[str, dict] = {}
     for name in ("chart", "apple", "spotify", "tiktok", "seed"):  # canonical spelling: first seen wins
         pairs = sources.get(name, [])
         n = len(pairs)
         for rank, (artist, title) in enumerate(pairs, 1):
+            match = re.match(r"(?i)^RE\\s+(.+)$", title.strip())
+            if match and track_identity(artist, match.group(1)) in plain:
+                print(f"Discarding chart re-entry duplicate: {artist} - {title}")
+                continue
             key = make_key(artist, title)
             c = cands.setdefault(key, {"key": key, "artist": artist, "title": title,
                                        "signals": {}, "score": 0.0})
