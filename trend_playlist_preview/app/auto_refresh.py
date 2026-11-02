@@ -160,6 +160,25 @@ def main(preview=False):
                          for r in report):
         raise RuntimeError("Unresolved TIDAL match; retaining existing playlist")
     proposed = [r["tidal_id"] for r in report]
+    # Generate an independently matched reserve pool for phone exclusions.
+    # Preserve the verified 50-track files even if reserve matching fails.
+    if preview:
+        approved_bytes = tp.APPROVED.read_bytes()
+        report_bytes = tp.MATCH_REPORT.read_bytes()
+        try:
+            run("apply", "--size", "80")
+            run("push", "--name", "Down with the Kids", "--dry-run")
+            reserve = tp.read_csv(tp.MATCH_REPORT)
+            valid = [r for r in reserve if r.get("status") == "matched"
+                     and r.get("decision") != "reject" and r.get("tidal_id")]
+            tp.write_csv(tp.DATA / "phone_candidate_pool.csv", tp.MATCH_FIELDS, valid)
+            print(f"Phone reserve: {len(valid)} verified matched candidates", flush=True)
+        except Exception as exc:
+            print(f"warning: phone reserve unavailable: {exc}", flush=True)
+            (tp.DATA / "phone_candidate_pool.csv").unlink(missing_ok=True)
+        finally:
+            tp.APPROVED.write_bytes(approved_bytes)
+            tp.MATCH_REPORT.write_bytes(report_bytes)
     changes = verify_plan(previous["track_ids"], proposed, market_rows)
     print(f"Verified changes: +{len(changes['added'])}, -{len(changes['removed'])}", flush=True)
     if preview:
