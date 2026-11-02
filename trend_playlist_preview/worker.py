@@ -1,5 +1,6 @@
 """HA OS add-on: token-protected read-only preview and Monday schedule."""
 import json
+import hashlib
 import os
 import subprocess
 import sys
@@ -64,7 +65,14 @@ def build_review():
         return {"ready": False, "reason": "Duplicate TIDAL IDs"}
     old, new = set(original), set(proposed)
     named = lambda row: {"artist": row["artist"], "title": row["title"], "tidal_id": row["tidal_id"]}
-    return {"ready": True, "last_run": state["last_run"],
+    proposal_id = hashlib.sha256(json.dumps({"run": state["last_run"], "old": original, "new": proposed}, sort_keys=True).encode()).hexdigest()[:20]
+    try:
+        saved = json.loads((DATA / "phone_review.json").read_text())
+    except (OSError, ValueError):
+        saved = {}
+    decisions = saved.get("decisions", {}) if saved.get("proposal_id") == proposal_id else {}
+    return {"ready": True, "proposal_id": proposal_id, "decisions": decisions,
+            "last_run": state["last_run"],
             "playlist_name": "Down with the Kids", "target": 50,
             "proposed_count": len(proposed),
             "additions": [named(r) for r in matches if r["tidal_id"] not in old],
@@ -112,6 +120,33 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if not self.authorized():
             return self.respond(401, {"error": "unauthorized"})
+        if self.path == "/decision":
+            if lock.locked():
+                return self.respond(409, {"error": "preview running"})
+            try:
+                size = int(self.headers.get("Content-Length", "0"))
+                if not 0 < size <= 2048:
+                    return self.respond(400, {"error": "invalid request size"})
+                payload = json.loads(self.rfile.read(size))
+                review = build_review()
+                if not review.get("ready") or payload.get("proposal_id") != review["proposal_id"]:
+                    return self.respond(409, {"error": "stale proposal"})
+                tid = str(payload.get("tidal_id", ""))
+                action = payload.get("action")
+                if tid not in {r["tidal_id"] for r in review["additions"]} or action not in ("keep", "exclude", "zeitgeist", "block"):
+                    return self.respond(400, {"error": "invalid selection"})
+                decisions = dict(review["decisions"])
+                if action == "keep":
+                    decisions.pop(tid, None)
+                else:
+                    decisions[tid] = action
+                path = DATA / "phone_review.json"
+                tmp = path.with_suffix(".tmp")
+                tmp.write_text(json.dumps({"proposal_id": review["proposal_id"], "decisions": decisions}, indent=2))
+                os.replace(tmp, path)
+                return self.respond(200, {"saved": True, "publish_enabled": False})
+            except (ValueError, KeyError, OSError, TypeError) as exc:
+                return self.respond(400, {"error": str(exc)})
         if self.path != "/preview":
             return self.respond(404, {"error": "not found"})
         if lock.locked():
