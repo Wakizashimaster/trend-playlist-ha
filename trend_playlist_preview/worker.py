@@ -177,6 +177,34 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(200, {"saved": True, "publish_enabled": False})
             except (ValueError, KeyError, OSError, TypeError) as exc:
                 return self.respond(400, {"error": str(exc)})
+        if self.path == "/approve":
+            if lock.locked():
+                return self.respond(409, {"error": "preview running"})
+            try:
+                size = int(self.headers.get("Content-Length", "0"))
+                if not 0 < size <= 2048:
+                    return self.respond(400, {"error": "invalid request"})
+                payload = json.loads(self.rfile.read(size))
+                review = build_review()
+                if (not review.get("ready") or payload.get("proposal_id") != review["proposal_id"]
+                        or payload.get("plan_hash") != review["plan_hash"]):
+                    return self.respond(409, {"error": "proposal changed; review again"})
+                mode = payload.get("mode")
+                if mode not in ("custom", "everything"):
+                    return self.respond(400, {"error": "invalid mode"})
+                if mode == "everything" and review["decisions"]:
+                    return self.respond(409, {"error": "Clear individual choices before Approve Everything"})
+                path = DATA / "phone_review.json"
+                record = {"proposal_id": review["proposal_id"], "decisions": review["decisions"],
+                          "approval": {"plan_hash": review["plan_hash"], "mode": mode,
+                                       "recorded_at": datetime.now(ZoneInfo("Europe/London")).isoformat(),
+                                       "publish_enabled": False}}
+                tmp = path.with_suffix(".tmp")
+                tmp.write_text(json.dumps(record, indent=2))
+                os.replace(tmp, path)
+                return self.respond(200, {"approval_recorded": True, "publish_enabled": False})
+            except (ValueError, KeyError, OSError, TypeError) as exc:
+                return self.respond(400, {"error": str(exc)})
         if self.path != "/preview":
             return self.respond(404, {"error": "not found"})
         if lock.locked():
