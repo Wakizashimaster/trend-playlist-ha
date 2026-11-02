@@ -32,6 +32,7 @@ def run_preview():
         return False
     state["running"] = True
     (DATA / "phone_candidate_pool.csv").unlink(missing_ok=True)
+    (DATA / "phone_baseline_tracks.json").unlink(missing_ok=True)
     try:
         result = subprocess.run([sys.executable, str(ROOT / "auto_refresh.py"), "--preview"],
             cwd=ROOT, env=os.environ.copy(), capture_output=True, text=True, timeout=7200)
@@ -65,6 +66,16 @@ def build_review():
     if len(proposed) != len(set(proposed)):
         return {"ready": False, "reason": "Duplicate TIDAL IDs"}
     old, new = set(original), set(proposed)
+    try:
+        metadata = json.loads((DATA / "phone_baseline_tracks.json").read_text(encoding="utf-8"))
+        if [str(x) for x in metadata["track_ids"]] != original:
+            raise ValueError("baseline metadata mismatch")
+        named_original = {str(r["tidal_id"]): {"tidal_id": str(r["tidal_id"]),
+                          "artist": r["artist"], "title": r["title"]} for r in metadata["tracks"]}
+    except (OSError, ValueError, KeyError, TypeError):
+        named_original = {}
+    removal = lambda tid: named_original.get(tid, {"tidal_id": tid})
+
     pool = rows("phone_candidate_pool.csv")
     pool_ids = [r["tidal_id"] for r in pool if r.get("tidal_id")]
     if not pool or pool_ids[:len(proposed)] != proposed:
@@ -79,7 +90,7 @@ def build_review():
     decisions = saved.get("decisions", {}) if saved.get("proposal_id") == proposal_id else {}
     excluded = {tid for tid, action in decisions.items() if action in ("exclude", "block")}
     retained = {tid for tid, action in decisions.items() if action == "retain" and tid in old and tid not in new}
-    revised = [{"tidal_id": tid, "artist": "", "title": ""} for tid in original if tid in retained]
+    revised = [removal(tid) for tid in original if tid in retained]
     seen = set(retained)
     for row in pool:
         tid = row["tidal_id"]
@@ -89,21 +100,25 @@ def build_review():
         if len(revised) == 50:
             break
     revised_ids = {r["tidal_id"] for r in revised}
+    zeitgeist = [named(r) for r in pool if decisions.get(r["tidal_id"]) == "zeitgeist"]
+    # Zeitgeist intent is independent of the main playlist's revised inclusion.
+
     plan_hash = hashlib.sha256(json.dumps([r["tidal_id"] for r in revised]).encode()).hexdigest()[:20]
     approval = saved.get("approval", {}) if saved.get("proposal_id") == proposal_id else {}
     approved = approval.get("plan_hash") == plan_hash
     return {"ready": True, "proposal_id": proposal_id, "decisions": decisions,
             "plan_hash": plan_hash, "approval_recorded": approved,
+            "zeitgeist_pending": zeitgeist,
             "approval_mode": approval.get("mode") if approved else None,
             "revised_count": len(revised),
             "revised_additions": [named(r) for r in revised if r["tidal_id"] not in old],
-            "revised_removals": [{"tidal_id": x} for x in original if x not in revised_ids],
+            "revised_removals": [removal(x) for x in original if x not in revised_ids],
             "replacement_count": sum(r["tidal_id"] not in proposed for r in revised),
             "last_run": state["last_run"],
             "playlist_name": "Down with the Kids", "target": 50,
             "proposed_count": len(proposed),
             "additions": [named(r) for r in matches if r["tidal_id"] not in old],
-            "removals": [{"tidal_id": x} for x in original if x not in new],
+            "removals": [removal(x) for x in original if x not in new],
             "unchanged": len(old & new),
             "review_candidates": [{"artist": r["artist"], "title": r["title"],
                                    "release_status": r.get("release_status", "")}
