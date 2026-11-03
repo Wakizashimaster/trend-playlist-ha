@@ -1,1 +1,1 @@
-{"domain":"trend_playlist","name":"Trend Playlist","version":"0.1.4","documentation":"https://github.com/Wakizashimaster/trend-playlist","config_flow":true,"iot_class":"local_polling","requirements":[]}
+{"domain":"trend_playlist","name":"Trend Playlist","version":"0.2.0","documentation":"https://github.com/Wakizashimaster/trend-playlist","config_flow":true,"iot_class":"local_polling","requirements":[]}
