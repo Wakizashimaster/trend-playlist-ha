@@ -46,6 +46,32 @@ def run_preview():
         lock.release()
     return True
 
+def run_publish(plan):
+    if not lock.acquire(blocking=False):
+        return False
+    state["running"] = True
+    state["publish_status"] = "running"
+    try:
+        path = DATA / "phone_publish_locked.json"
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(plan, indent=2), encoding="utf-8")
+        os.replace(tmp, path)
+        result = subprocess.run([sys.executable, str(ROOT / "phone_publish.py"), str(path)],
+            cwd=ROOT, env=os.environ.copy(), capture_output=True, text=True, timeout=600)
+        state["publish_status"] = "verified" if result.returncode == 0 else "failed"
+        state["publish_message"] = (result.stdout + "\\n" + result.stderr)[-4000:]
+        state["published_at"] = datetime.now(ZoneInfo("Europe/London")).isoformat() if result.returncode == 0 else None
+        if result.returncode == 0:
+            state["ok"] = False  # Published proposal is no longer a valid preview.
+        REPORT.write_text(json.dumps({k:v for k,v in state.items() if k != "running"}, indent=2))
+    except Exception as exc:
+        state["publish_status"] = "failed"
+        state["publish_message"] = str(exc)
+    finally:
+        state["running"] = False
+        lock.release()
+    return True
+
 def build_review():
     """Read-only, named changes from the latest successful preview."""
     import csv
@@ -235,6 +261,47 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(200, {"approval_recorded": True, "publish_enabled": False})
             except (ValueError, KeyError, OSError, TypeError) as exc:
                 return self.respond(400, {"error": str(exc)})
+        if self.path == "/publish_commit":
+            if lock.locked():
+                return self.respond(409, {"error": "another operation is running"})
+            try:
+                size = int(self.headers.get("Content-Length", "0"))
+                if not 0 < size <= 2048:
+                    return self.respond(400, {"error": "invalid request"})
+                payload = json.loads(self.rfile.read(size))
+                review = build_review()
+                if not review.get("ready") or not review.get("approval_recorded"):
+                    return self.respond(409, {"error": "Valid approval required"})
+                if (payload.get("proposal_id") != review["proposal_id"] or
+                        payload.get("plan_hash") != review["plan_hash"]):
+                    return self.respond(409, {"error": "Stale approval"})
+                saved = json.loads((DATA / "phone_review.json").read_text())
+                approval = saved["approval"]
+                if approval.get("track_ids") != review["revised_track_ids"]:
+                    return self.respond(409, {"error": "Approved track sequence changed"})
+                preflight = json.loads((DATA / "phone_publish_preflight.json").read_text())
+                if (preflight.get("proposal_id") != review["proposal_id"] or
+                        preflight.get("plan_hash") != review["plan_hash"] or
+                        preflight.get("status") != "preflight_only" or
+                        preflight.get("proposed_ids") != review["revised_track_ids"]):
+                    return self.respond(409, {"error": "Run publish safety check again"})
+                baseline = json.loads((DATA / "auto_refresh_state.json").read_text())
+                original = [str(x) for x in baseline["track_ids"]]
+                if original != preflight.get("original_ids"):
+                    return self.respond(409, {"error": "Baseline changed since preflight"})
+                journal_path = DATA / "phone_publish_journal.json"
+                if journal_path.exists():
+                    journal = json.loads(journal_path.read_text())
+                    if journal.get("status") != "verified":
+                        return self.respond(409, {"error": "Unresolved publishing attempt; manual recovery required"})
+                    if journal.get("proposal_id") == review["proposal_id"]:
+                        return self.respond(409, {"error": "This proposal was already published"})
+                plan = {"proposal_id": review["proposal_id"], "playlist_id": "ac2a24f5-a386-40cb-a637-ad9f89f32622",
+                        "original_ids": original, "proposed_ids": review["revised_track_ids"]}
+                threading.Thread(target=run_publish, args=(plan,), daemon=True).start()
+                return self.respond(202, {"started": True, "message": "Publishing started; monitor preview sensor"})
+            except Exception as exc:
+                return self.respond(409, {"error": str(exc)})
         if self.path == "/publish":
             # Explicitly dry-run only until the in-place mutation path is tested.
             if lock.locked():
