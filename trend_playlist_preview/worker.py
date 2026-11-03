@@ -106,9 +106,12 @@ def build_review():
     revised_track_ids = [r["tidal_id"] for r in revised]
     plan_hash = hashlib.sha256(json.dumps(revised_track_ids).encode()).hexdigest()[:20]
     approval = saved.get("approval", {}) if saved.get("proposal_id") == proposal_id else {}
-    approved = approval.get("plan_hash") == plan_hash
+    approved = (approval.get("plan_hash") == plan_hash and
+                approval.get("track_ids") == revised_track_ids and
+                approval.get("mode") in ("custom", "everything"))
     return {"ready": True, "proposal_id": proposal_id, "decisions": decisions,
             "plan_hash": plan_hash, "approval_recorded": approved,
+            "publish_ready": approved and not state.get("running", False),
             "revised_track_ids": revised_track_ids,
             "zeitgeist_pending": zeitgeist,
             "approval_mode": approval.get("mode") if approved else None,
@@ -223,6 +226,42 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(200, {"approval_recorded": True, "publish_enabled": False})
             except (ValueError, KeyError, OSError, TypeError) as exc:
                 return self.respond(400, {"error": str(exc)})
+        if self.path == "/publish":
+            # Explicitly dry-run only until the in-place mutation path is tested.
+            if lock.locked():
+                return self.respond(409, {"error": "preview running"})
+            try:
+                size = int(self.headers.get("Content-Length", "0"))
+                if not 0 < size <= 2048:
+                    return self.respond(400, {"error": "invalid request"})
+                payload = json.loads(self.rfile.read(size))
+                review = build_review()
+                if not review.get("ready") or not review.get("approval_recorded"):
+                    return self.respond(409, {"error": "A valid approval is required"})
+                if (payload.get("proposal_id") != review["proposal_id"] or
+                        payload.get("plan_hash") != review["plan_hash"]):
+                    return self.respond(409, {"error": "Approved proposal changed"})
+                import auto_refresh
+                baseline = json.loads((DATA / "auto_refresh_state.json").read_text())
+                original = [str(x) for x in baseline["track_ids"]]
+                if baseline.get("playlist_id") not in (None, auto_refresh.PLAYLIST_ID):
+                    return self.respond(409, {"error": "Protected playlist identity mismatch"})
+                auto_refresh.verify_live_baseline(original)
+                proposed = review["revised_track_ids"]
+                if not proposed or len(set(proposed)) != len(proposed):
+                    return self.respond(409, {"error": "Invalid reviewed track sequence"})
+                record = {"proposal_id": review["proposal_id"], "plan_hash": review["plan_hash"],
+                          "original_ids": original, "proposed_ids": proposed,
+                          "checked_at": datetime.now(ZoneInfo("Europe/London")).isoformat(),
+                          "status": "preflight_only", "mutated": False}
+                path = DATA / "phone_publish_preflight.json"
+                tmp = path.with_suffix(".tmp")
+                tmp.write_text(json.dumps(record, indent=2))
+                os.replace(tmp, path)
+                return self.respond(200, {"preflight_passed": True, "published": False,
+                                          "message": "Live baseline verified; publishing remains disabled"})
+            except Exception as exc:
+                return self.respond(409, {"error": str(exc), "published": False})
         if self.path != "/preview":
             return self.respond(404, {"error": "not found"})
         if lock.locked():
