@@ -109,7 +109,16 @@ def build_review():
     approved = (approval.get("plan_hash") == plan_hash and
                 approval.get("track_ids") == revised_track_ids and
                 approval.get("mode") in ("custom", "everything"))
+    try:
+        preflight = json.loads((DATA / "phone_publish_preflight.json").read_text())
+    except (OSError, ValueError):
+        preflight = {}
+    preflight_valid = (approved and preflight.get("proposal_id") == proposal_id and
+                       preflight.get("plan_hash") == plan_hash and
+                       preflight.get("status") == "preflight_only")
     return {"ready": True, "proposal_id": proposal_id, "decisions": decisions,
+            "publish_preflight_passed": preflight_valid,
+            "publish_preflight_checked_at": preflight.get("checked_at") if preflight_valid else None,
             "plan_hash": plan_hash, "approval_recorded": approved,
             "publish_ready": approved and not state.get("running", False),
             "revised_track_ids": revised_track_ids,
