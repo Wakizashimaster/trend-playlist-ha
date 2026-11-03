@@ -139,7 +139,8 @@ def build_review():
         preflight = json.loads((DATA / "phone_publish_preflight.json").read_text())
     except (OSError, ValueError):
         preflight = {}
-    preflight_valid = (approved and preflight.get("proposal_id") == proposal_id and
+    preflight_valid = (approved and preflight.get("approval_recorded_at") == approval.get("recorded_at") and
+                       preflight.get("proposal_id") == proposal_id and
                        preflight.get("plan_hash") == plan_hash and
                        preflight.get("status") == "preflight_only")
     return {"ready": True, "proposal_id": proposal_id, "decisions": decisions,
@@ -280,7 +281,8 @@ class Handler(BaseHTTPRequestHandler):
                 if approval.get("track_ids") != review["revised_track_ids"]:
                     return self.respond(409, {"error": "Approved track sequence changed"})
                 preflight = json.loads((DATA / "phone_publish_preflight.json").read_text())
-                if (preflight.get("proposal_id") != review["proposal_id"] or
+                if (preflight.get("approval_recorded_at") != approval.get("recorded_at") or
+                        preflight.get("proposal_id") != review["proposal_id"] or
                         preflight.get("plan_hash") != review["plan_hash"] or
                         preflight.get("status") != "preflight_only" or
                         preflight.get("proposed_ids") != review["revised_track_ids"]):
@@ -328,7 +330,9 @@ class Handler(BaseHTTPRequestHandler):
                 proposed = review["revised_track_ids"]
                 if not proposed or len(set(proposed)) != len(proposed):
                     return self.respond(409, {"error": "Invalid reviewed track sequence"})
+                approval = json.loads((DATA / "phone_review.json").read_text())["approval"]
                 record = {"proposal_id": review["proposal_id"], "plan_hash": review["plan_hash"],
+                          "approval_recorded_at": approval["recorded_at"],
                           "original_ids": original, "proposed_ids": proposed,
                           "checked_at": datetime.now(ZoneInfo("Europe/London")).isoformat(),
                           "status": "preflight_only", "mutated": False}
