@@ -4,7 +4,7 @@ from .const import DOMAIN
 
 async def async_setup_entry(hass, entry, async_add_entities):
     coordinator, session = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([PreviewButton(coordinator, session, entry), ApprovalButton(coordinator, session, entry, "custom"), ApprovalButton(coordinator, session, entry, "everything"), PublishPreflightButton(coordinator, session, entry)])
+    async_add_entities([PreviewButton(coordinator, session, entry), ApprovalButton(coordinator, session, entry, "custom"), ApprovalButton(coordinator, session, entry, "everything"), PublishPreflightButton(coordinator, session, entry), PublishButton(coordinator, session, entry)])
 
 class PreviewButton(CoordinatorEntity, ButtonEntity):
     _attr_name = "Trend Playlist run preview"
@@ -59,5 +59,30 @@ class PublishPreflightButton(CoordinatorEntity, ButtonEntity):
             headers={"Authorization": "Bearer " + self.entry.data["token"]},
             json={"proposal_id": review["proposal_id"], "plan_hash": review["plan_hash"]},
             timeout=45) as response:
+            response.raise_for_status()
+        await self.coordinator.async_request_refresh()
+
+class PublishButton(CoordinatorEntity, ButtonEntity):
+    _attr_name = "Trend Playlist Publish approved playlist"
+    _attr_icon = "mdi:playlist-check"
+
+    def __init__(self, coordinator, session, entry):
+        super().__init__(coordinator)
+        self.session, self.entry = session, entry
+        self._attr_unique_id = entry.entry_id + "_publish_approved"
+
+    @property
+    def available(self):
+        review = self.coordinator.data.get("review", {})
+        return (super().available and review.get("approval_recorded", False)
+                and review.get("publish_preflight_passed", False)
+                and not self.coordinator.data.get("running", False))
+
+    async def async_press(self):
+        review = self.coordinator.data["review"]
+        async with self.session.post(self.entry.data["url"] + "/publish_commit",
+            headers={"Authorization": "Bearer " + self.entry.data["token"]},
+            json={"proposal_id": review["proposal_id"], "plan_hash": review["plan_hash"]},
+            timeout=20) as response:
             response.raise_for_status()
         await self.coordinator.async_request_refresh()
