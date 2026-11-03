@@ -241,6 +241,8 @@ class Handler(BaseHTTPRequestHandler):
                 if (payload.get("proposal_id") != review["proposal_id"] or
                         payload.get("plan_hash") != review["plan_hash"]):
                     return self.respond(409, {"error": "Approved proposal changed"})
+                if str(ROOT) not in sys.path:
+                    sys.path.insert(0, str(ROOT))
                 import auto_refresh
                 baseline = json.loads((DATA / "auto_refresh_state.json").read_text())
                 original = [str(x) for x in baseline["track_ids"]]
