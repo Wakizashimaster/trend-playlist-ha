@@ -221,6 +221,17 @@ class Handler(BaseHTTPRequestHandler):
                 if not ((tid in additions and action in ("keep", "exclude", "zeitgeist", "block")) or
                         (tid in removals and action in ("retain", "remove"))):
                     return self.respond(400, {"error": "invalid selection"})
+                if action == "block":
+                    # A permanent song block is an explicit user action, not a
+                    # temporary weekly exclusion. Persist it in the existing CSV.
+                    if str(ROOT) not in sys.path:
+                        sys.path.insert(0, str(ROOT))
+                    import trend_playlist as tp
+                    match = next((r for r in review["additions"] if r["tidal_id"] == tid), None)
+                    if not match or not match.get("artist") or not match.get("title"):
+                        return self.respond(409, {"error": "Cannot block a song without verified metadata"})
+                    tp.add_blocks([tp.block_record(match["artist"], match["title"],
+                                   reason="Blocked from Home Assistant phone review")])
                 decisions = dict(review["decisions"])
                 if action in ("keep", "remove"):
                     decisions.pop(tid, None)
