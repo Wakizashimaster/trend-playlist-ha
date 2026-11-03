@@ -1,32 +1,47 @@
-# Install and test (preview-only)
+# Installation and operation
 
-## 1. Add the app repository
+> **Before you start:** Trend Playlist is an independent community integration for an existing TIDAL playlist. It can make real changes to your playlist **only after an explicit Publish action**. Back up your playlist, confirm your account/session and keep the app's API private to your LAN.
 
-In Home Assistant: **Settings → Apps → App Store → ⋮ → Repositories**, add:
+## 1. Install the Home Assistant OS app
+
+In **Settings → Apps → App Store → ⋮ → Repositories**, add:
 
 `https://github.com/Wakizashimaster/trend-playlist-ha`
 
-Install **Trend Playlist Preview**. Before starting it, set **api_token** to a random secret of at least 24 characters. Leave the network port 8099 accessible only on your trusted local network; do **not** forward it through your router or expose it publicly.
+Install **Trend Playlist Preview**. The legacy app name is retained for upgrade compatibility; it now supports reviewed publishing. Set a unique `api_token` of at least 24 characters. Do not forward port **8099** or expose it publicly.
 
-**Do not start the app until the TIDAL session and baseline have been migrated.** The app's data is mounted at `/config` inside the app container. Home Assistant OS exposes the add-on configuration directory as a separate location from the Home Assistant Core `/config`; don't confuse them. Securely copy the existing verified `tidal_session.json`, `auto_refresh_state.json` and any required `inputs/`, `seeds.csv`, `blocklist.csv` into the app's configuration directory. Preserve a Windows backup. No passwords or personal files should be committed to GitHub.
+The app expects a working local `tidal_session.json`, `auto_refresh_state.json` and any existing `blocklist.csv` / input files in its own persistent add-on configuration directory. Home Assistant Core's `/config` is **not** the same directory. Keep offline backups. Never commit session files or credentials to Git.
 
-## 2. Install the custom integration
+## 2. Install the HACS integration
 
-Using HACS: add `https://github.com/Wakizashimaster/trend-playlist-ha` as a **custom repository** of type **Integration**, install Trend Playlist, and restart Home Assistant. If HACS does not recognize the repository, manually copy `custom_components/trend_playlist` into Home Assistant Core's `/config/custom_components/trend_playlist` and restart.
+Add this repository as a **custom Integration** repository in HACS, download **Trend Playlist**, and restart Home Assistant. If updating an existing installation, use **Redownload** in HACS and restart Home Assistant after updating the app.
 
-Then open **Settings → Devices & services → Add integration → Trend Playlist**. Enter `http://YOUR_PI_LAN_IP:8099` and the same API token. Replace YOUR_PI_LAN_IP with your Pi's LAN IP. Do not use your Home Assistant Cloud URL as the worker URL: HA Core talks to the worker locally.
+Go to **Settings → Devices & services → Add integration → Trend Playlist**. Enter the app's LAN URL, e.g. `http://YOUR_PI_IP:8099`, and the same API token. Home Assistant Core contacts the app locally; do not use a Home Assistant Cloud URL for this connection.
 
-The integration provides a preview status sensor and a **Run preview** button. You can use them from your authenticated Home Assistant dashboard through Home Assistant Cloud.
+## 3. Review and publish
 
-## 3. Verify safely
+1. Press **Trend Playlist run preview** (or wait for Monday 08:00 UK). Preview is read-only with respect to TIDAL.
+2. Inspect **Trend Playlist proposal** and the per-track review selects. Exclude unwanted additions, retain proposed removals or mark an addition for Zeitgeist.
+3. **Block from future proposals** writes a permanent song block to the app's local `blocklist.csv`. Changing the select back does not automatically unblock it; use the existing blocklist tooling for removal. A fresh preview will apply saved blocks.
+4. Press **Approve reviewed proposal** or **Approve Everything** (the latter requires no individual decisions).
+5. Press **Trend Playlist check publish safety**. Confirm `approval_recorded: true` and `publish_preflight_passed: true`.
+6. Only when ready to change TIDAL, press **Trend Playlist Publish approved playlist**. Monitor the preview/status sensor for `publish_status: verified`, then inspect the live playlist and artwork in TIDAL.
 
-First confirm the app starts and the integration shows a status. Then press **Run preview** and inspect the app log and status sensor. The worker runs `auto_refresh.py --preview` and **does not publish to TIDAL**. The app will refuse a preview when its trusted baseline or TIDAL session is missing.
+The live playlist must still match its saved baseline immediately before publishing. Publishing creates a local recovery snapshot and verifies the final track IDs. An error or partial update is **not** automatically rolled back: do not retry blindly. Preserve the recovery files and investigate.
 
-This is an **untested initial release**. Do not disable the existing Windows task until the Pi is verified. Do not rely on the Monday schedule yet.
+## 4. What the status means
 
-## Known limitations
+- `approval_recorded: false` — current selection is not approved.
+- `publish_preflight_passed: false` — run the safety check after approval.
+- `publish_status: verified` — the last publish passed automated track verification.
+- `ok: false` after a successful publish — the old preview was intentionally invalidated; it is **not** a publish failure.
+- `zeitgeist_pending` — recorded intentions only, not a Zeitgeist playlist update.
 
-- No Gmail reporting, mobile approval, in-place publishing, or success verification yet.
-- The Monday 08:00 Europe/London scheduler has no missed-run catch-up.
-- Preview status currently exposes the last 5000 characters of process output as sensor attributes. Avoid sharing diagnostic output publicly.
-- This release is intended for installation and connectivity testing, not production automation.
+## Current limitations
+
+- One protected TIDAL playlist; playlist ID is currently configured in the app code.
+- No Gmail summary or publish notifications yet.
+- Zeitgeist promotion is recorded but not executed.
+- No missed-Monday-run catch-up; an always-on Home Assistant host is recommended.
+- No automatic recovery from a partially applied TIDAL update.
+- The app API is authenticated but **not HTTPS** on its LAN port; do not expose it beyond your trusted network.
