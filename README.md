@@ -6,7 +6,7 @@ Trend Playlist is a community-maintained Home Assistant OS app (add-on) and HACS
 
 > **Independent community project.** Not affiliated with or endorsed by Home Assistant, HACS, TIDAL, Spotify, Apple Music, or Official Charts. Chart and music metadata remain the property of their respective owners. You need your own TIDAL account and a working authenticated session. Use at your own risk; back up your playlist before the first publish.
 
-[Installation and configuration](INSTALL.md) · [Release history](CHANGELOG.md)
+[Installation and configuration](INSTALL.md) · [Email notifications](NOTIFICATIONS.md) · [Release history](CHANGELOG.md)
 
 ## Features
 
