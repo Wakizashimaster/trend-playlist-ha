@@ -14,7 +14,7 @@ Trend Playlist is a community-maintained Home Assistant OS app (add-on) and HACS
 - **Phone-friendly review:** proposed additions/removals, individual exclude, retain and Zeitgeist intent, automatic eligible replacements and explicit approval.
 - **Separate publish action:** approval, live-playlist safety preflight and publish are three distinct steps.
 - **In-place TIDAL updates:** protected existing playlist identity, recovery snapshots, final track verification and a fail-closed publishing journal.
-- **Permanent song blocks:** an explicit *Block from future proposals* choice writes to the local blocklist; blocks survive subsequent previews.
+- **Optional reversible manual TIDAL exclusions (0.3.0 candidate):** removing a track in TIDAL excludes its exact track ID from future previews; re-adding that ID clears the automatic exclusion on the next poll. Disabled by default; requires a supervised first preview.\n- **Permanent song blocks:** an explicit *Block from future proposals* choice writes to the local blocklist; blocks survive subsequent previews.
 - **No automatic publishing:** scheduled jobs only prepare previews. The live playlist changes only when you press **Publish approved playlist**.
 
 ## Safety and scope
