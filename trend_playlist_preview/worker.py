@@ -91,6 +91,8 @@ def build_review():
             return []
         with path.open(encoding="utf-8-sig", newline="") as stream:
             return list(csv.DictReader(stream))
+    if (DATA / "manual_reconciliation_pending.json").exists():
+        return {"ready": False, "reason": "Manual reconciliation needs recovery"}
     if state.get("running") or state.get("ok") is not True:
         return {"ready": False, "reason": "No completed successful preview"}
     baseline = json.loads((DATA / "auto_refresh_state.json").read_text())
@@ -308,6 +310,8 @@ class Handler(BaseHTTPRequestHandler):
                         preflight.get("status") != "preflight_only" or
                         preflight.get("proposed_ids") != review["revised_track_ids"]):
                     return self.respond(409, {"error": "Run publish safety check again"})
+                if (DATA / "manual_reconciliation_pending.json").exists():
+                    return self.respond(409, {"error": "Unresolved manual reconciliation"})
                 baseline = json.loads((DATA / "auto_refresh_state.json").read_text())
                 original = [str(x) for x in baseline["track_ids"]]
                 if original != preflight.get("original_ids"):
