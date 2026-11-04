@@ -726,6 +726,57 @@ def protect_playlist_artwork(name: str, dry_run: bool) -> None:
             "No playlist was changed.")
 
 
+def manual_excluded_track_ids():
+    """Load reversible TIDAL-ID exclusions only for the protected playlist.
+
+    A malformed store is an error, never an empty blocklist fallback.
+    Other playlists are unaffected.
+    """
+    import manual_exclusions
+    return set(manual_exclusions.load(
+        DATA / "manual_tidal_exclusions.json",
+        "ac2a24f5-a386-40cb-a637-ad9f89f32622")["excluded_ids"])
+
+
+def refill_from_ranked_matches(rows, excluded_ids, *, target=50):
+    """Take the highest-ranked eligible matches, preserving original order.
+
+    This never invents a TIDAL match, substitutes a recording, or returns a
+    short playlist. Unmatched/review-required rows are not silently accepted.
+    """
+    if target < 1:
+        raise ValueError("Target must be positive")
+    selected, seen = [], set()
+    for row in rows:
+        tid = str(row.get("tidal_id") or "")
+        if (not tid or tid in excluded_ids or tid in seen
+                or row.get("status") != "matched"
+                or row.get("decision") == "reject"):
+            continue
+        seen.add(tid)
+        selected.append(row)
+        if len(selected) == target:
+            return selected
+    raise RuntimeError(
+        f"Only {len(selected)} eligible matched TIDAL tracks for target {target}; "
+        "cannot safely refill playlist")
+
+
+def reject_manual_exclusions(rows, excluded_ids):
+    """Fail closed if matching resolves any excluded ID.
+
+    Refusing the entire proposal is safer than silently shortening it or
+    substituting another recording. The next milestone will refill safely.
+    """
+    conflicts = [r for r in rows if str(r.get("tidal_id", "")) in excluded_ids]
+    if conflicts:
+        names = ", ".join(f"{r['artist']} - {r['title']} ({r['tidal_id']})"
+                          for r in conflicts[:5])
+        raise RuntimeError(
+            "TIDAL manual exclusions matched proposed songs: " + names
+            + "; proposal and reserve pool rejected; no TIDAL changes made")
+
+
 def cmd_push(args) -> None:
     protect_playlist_artwork(args.name, args.dry_run)
     approved = dedupe_tracks(read_csv(APPROVED))
@@ -772,6 +823,17 @@ def cmd_push(args) -> None:
                        "status": status, "decision": decision})
         if t and not duplicate and decision != "reject":
             matched.append((t, status, decision))
+    # The same matching command generates both the 50-track proposal and the
+    # 80-track replacement pool. Check IDs before either result is persisted.
+    # Existing permanent song/artist blocks remain enforced by select/apply.
+    if args.name == "Down with the Kids":
+        excluded = manual_excluded_track_ids()
+        if os.environ.get("TREND_PLAYLIST_REFILL") == "YES" and args.dry_run:
+            # Ranked refill is applied by the caller to the full dry-run
+            # report; no excluded ID is ever written to a final proposal.
+            print(f"Ranked refill enabled: {len(excluded)} reversible exclusions", flush=True)
+        else:
+            reject_manual_exclusions(report, excluded)
     write_csv(MATCH_REPORT, MATCH_FIELDS, report)
     write_csv(MATCH_CANDIDATES, CANDIDATE_FIELDS, diagnostics)
     print(f"diagnostic candidates: {MATCH_CANDIDATES}")

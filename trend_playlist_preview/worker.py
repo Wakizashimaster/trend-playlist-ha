@@ -18,6 +18,13 @@ os.environ["TREND_PLAYLIST_DATA"] = str(DATA)
 TOKEN = json.loads(Path("/data/options.json").read_text()).get("api_token", "")
 if len(TOKEN) < 24:
     sys.exit("Configure a random API token of at least 24 characters in add-on options")
+# Explicit add-on opt-in. Default installation retains strict baseline checks.
+if json.loads(Path("/data/options.json").read_text()).get("respect_manual_tidal_removals") is True:
+    os.environ["TREND_PLAYLIST_MANUAL_REMOVALS"] = "YES"
+    os.environ["TREND_PLAYLIST_REFILL"] = "YES"
+else:
+    os.environ.pop("TREND_PLAYLIST_MANUAL_REMOVALS", None)
+    os.environ.pop("TREND_PLAYLIST_REFILL", None)
 lock = threading.Lock()
 state = {"running": False, "last_run": None, "ok": None, "message": "Not run yet"}
 if REPORT.exists():
@@ -91,6 +98,8 @@ def build_review():
             return []
         with path.open(encoding="utf-8-sig", newline="") as stream:
             return list(csv.DictReader(stream))
+    if (DATA / "manual_reconciliation_pending.json").exists():
+        return {"ready": False, "reason": "Manual reconciliation needs recovery"}
     if state.get("running") or state.get("ok") is not True:
         return {"ready": False, "reason": "No completed successful preview"}
     baseline = json.loads((DATA / "auto_refresh_state.json").read_text())
@@ -308,6 +317,8 @@ class Handler(BaseHTTPRequestHandler):
                         preflight.get("status") != "preflight_only" or
                         preflight.get("proposed_ids") != review["revised_track_ids"]):
                     return self.respond(409, {"error": "Run publish safety check again"})
+                if (DATA / "manual_reconciliation_pending.json").exists():
+                    return self.respond(409, {"error": "Unresolved manual reconciliation"})
                 baseline = json.loads((DATA / "auto_refresh_state.json").read_text())
                 original = [str(x) for x in baseline["track_ids"]]
                 if original != preflight.get("original_ids"):

@@ -110,6 +110,74 @@ def live_playlist_ids():
     raise RuntimeError("TIDAL playlist exceeds safe read limit")
 
 
+
+def inspect_manual_edits(previous_ids):
+    """Stage a read-only reconciliation; never alter baseline or exclusions here.
+
+    Applying the plan is deliberately gated until the candidate-selection and
+    approval safeguards are wired in the following milestone.
+    """
+    import manual_exclusions as exclusions
+    journal_path = tp.DATA / "phone_publish_journal.json"
+    if journal_path.exists():
+        journal = json.loads(journal_path.read_text(encoding="utf-8"))
+        if journal.get("status") != "verified":
+            raise RuntimeError("Unresolved publish journal; manual reconciliation refused")
+    first = live_playlist_ids()
+    second = live_playlist_ids()
+    if first != second:
+        raise RuntimeError("Live playlist changed between reads; no reconciliation")
+    store = exclusions.load(tp.DATA / "manual_tidal_exclusions.json", PLAYLIST_ID)
+    result, updated = exclusions.plan(previous_ids, first, store)
+    changes = bool(result.removed_ids or result.restored_ids or result.added_ids or result.reordered)
+    if changes:
+        # Read-only diagnostic; intentionally not used as an approved baseline.
+        print("Manual TIDAL edit detected (read-only): "
+              f"removed={list(result.removed_ids)}, restored={list(result.restored_ids)}, "
+              f"added={list(result.added_ids)}, reordered={result.reordered}", flush=True)
+        print(f"Proposed reversible exclusions: {updated['excluded_ids']}", flush=True)
+    return result, updated
+
+
+
+def commit_manual_reconciliation(previous, result, updated):
+    """Journal local-only changes; fail closed if interrupted mid-commit.
+
+    Never modifies TIDAL. The transaction marker is cleared only when both
+    local files have been durably replaced. An interrupted transaction must
+    be inspected rather than automatically replayed.
+    """
+    import manual_exclusions as exclusions
+    marker = tp.DATA / "manual_reconciliation_pending.json"
+    if marker.exists():
+        raise RuntimeError("Unresolved manual reconciliation; inspect local recovery marker")
+    before = [str(x) for x in previous["track_ids"]]
+    live = list(result.live_ids)
+    if live_playlist_ids() != live:
+        raise RuntimeError("Live playlist changed before reconciliation commit")
+    store_path = tp.DATA / "manual_tidal_exclusions.json"
+    backup = tp.DATA / "manual_reconciliation_backup.json"
+    if backup.exists():
+        raise RuntimeError("Existing manual reconciliation backup; inspect before continuing")
+    backup_data = {"baseline": previous,
+                   "exclusions": exclusions.load(store_path, PLAYLIST_ID)}
+    exclusions.atomic_write(backup, backup_data)
+    exclusions.atomic_write(marker, {"status": "started",
+                                     "playlist_id": PLAYLIST_ID,
+                                     "previous_ids": before, "live_ids": live})
+    new_baseline = {**previous, "playlist_id": PLAYLIST_ID,
+                    "playlist_name": "Down with the Kids", "track_ids": live,
+                    "updated_at": datetime.now(timezone.utc).isoformat()}
+    # Both writes are atomic individually, but not as a pair. The marker
+    # prevents trusting partially committed state after an interruption.
+    exclusions.atomic_write(store_path, updated)
+    save_state(new_baseline)
+    marker.unlink()
+    backup.unlink()
+    return new_baseline
+
+
+
 def verify_live_baseline(expected):
     actual = live_playlist_ids()
     if actual != [str(x) for x in expected]:
@@ -131,6 +199,23 @@ def main(preview=False):
         raise RuntimeError("Unexpected baseline playlist")
     if previous.get("playlist_name") == "UK Trends":
         print("Migrating saved baseline name to Down with the Kids after live verification", flush=True)
+    pending_marker = tp.DATA / "manual_reconciliation_pending.json"
+    if pending_marker.exists():
+        raise RuntimeError("Unresolved manual reconciliation; inspect recovery marker")
+    if preview and os.environ.get("TREND_PLAYLIST_MANUAL_REMOVALS") == "YES":
+        if os.environ.get("TREND_PLAYLIST_REFILL") != "YES":
+            raise RuntimeError("Manual edit acceptance requires ranked candidate refill")
+        reconciliation, pending_exclusions = inspect_manual_edits(previous["track_ids"])
+        if (reconciliation.removed_ids or reconciliation.added_ids
+                or reconciliation.restored_ids or reconciliation.reordered):
+            previous = commit_manual_reconciliation(
+                previous, reconciliation, pending_exclusions)
+            # The old proposal/approval cannot be reused after a live edit.
+            for stale in ("phone_publish_locked.json", "phone_publish_preflight.json",
+                          "phone_review.json", "phone_candidate_pool.csv",
+                          "match_report.csv", "approved.csv", "review.csv"):
+                (tp.DATA / stale).unlink(missing_ok=True)
+            print("Manual TIDAL edits reconciled locally; fresh preview required", flush=True)
     verify_live_baseline(previous["track_ids"])
     if preview:
         # Capture verified live metadata for human-readable removal review.
@@ -181,16 +266,42 @@ def main(preview=False):
             f"apple={apple_rows}, spotify={spotify_rows}); retaining existing playlist")
     if market_rows < MIN_MARKET_ROWS:
         raise RuntimeError("Insufficient chart data; retaining existing playlist")
-    run("apply")
+    refill = preview and os.environ.get("TREND_PLAYLIST_REFILL") == "YES"
+    if refill and os.environ.get("TREND_PLAYLIST_MANUAL_REMOVALS") != "YES":
+        raise RuntimeError("Refill requires manual-removal inspection to be enabled")
+    if refill:
+        # Generate a ranked 80-track candidate set before choosing the 50.
+        run("apply", "--size", "80")
+        os.environ["TREND_PLAYLIST_REFILL"] = "YES"
+    else:
+        run("apply")
     run("push", "--name", "Down with the Kids", "--dry-run")
     report = tp.read_csv(tp.MATCH_REPORT)
+    if refill:
+        excluded = tp.manual_excluded_track_ids()
+        chosen = tp.refill_from_ranked_matches(report, excluded, target=50)
+        chosen_pairs = {(r["artist"], r["title"]) for r in chosen}
+        approved = tp.read_csv(tp.APPROVED)
+        if len(chosen_pairs) != 50:
+            raise RuntimeError("Ambiguous ranked refill identities")
+        approved_50 = [r for r in approved if (r["artist"], r["title"]) in chosen_pairs]
+        if len(approved_50) != 50:
+            raise RuntimeError("Ranked refill does not match approved rows")
+        reserve = [r for r in report if r.get("status") == "matched"
+                   and r.get("decision") != "reject"
+                   and r.get("tidal_id") not in excluded]
+        tp.write_csv(tp.DATA / "phone_candidate_pool.csv", tp.MATCH_FIELDS, reserve)
+        tp.write_csv(tp.APPROVED, ["artist", "title", "key"], approved_50)
+        tp.write_csv(tp.MATCH_REPORT, tp.MATCH_FIELDS, chosen)
+        report = chosen
+        print(f"Ranked refill selected 50 of {len(reserve)} eligible matches", flush=True)
     if not report or any(r.get("status") != "matched" or r.get("decision") == "reject"
                          for r in report):
         raise RuntimeError("Unresolved TIDAL match; retaining existing playlist")
     proposed = [r["tidal_id"] for r in report]
     # Generate an independently matched reserve pool for phone exclusions.
     # Preserve the verified 50-track files even if reserve matching fails.
-    if preview:
+    if preview and not refill:
         approved_bytes = tp.APPROVED.read_bytes()
         report_bytes = tp.MATCH_REPORT.read_bytes()
         try:
@@ -210,6 +321,7 @@ def main(preview=False):
     changes = verify_plan(previous["track_ids"], proposed, market_rows)
     print(f"Verified changes: +{len(changes['added'])}, -{len(changes['removed'])}", flush=True)
     if preview:
+        verify_live_baseline(previous["track_ids"])
         print("PREVIEW ONLY: no TIDAL playlist changes; local review/approved/match CSVs were refreshed.", flush=True)
         print("Added TIDAL IDs: " + (", ".join(changes["added"]) or "(none)"), flush=True)
         print("Removed TIDAL IDs: " + (", ".join(changes["removed"]) or "(none)"), flush=True)

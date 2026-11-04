@@ -2,6 +2,23 @@
 
 All notable user-facing changes are recorded here. Releases follow semantic versioning where practical. The Home Assistant app and HACS integration should be updated together.
 
+## 0.3.0 — release candidate (not deployed)
+
+### Added
+- Opt-in **Respect manual TIDAL removals** app setting, disabled by default.
+- Monday/manual previews can reconcile a small, verified set of manual changes to the protected live playlist without changing TIDAL.
+- Tracks manually removed in TIDAL are excluded by TIDAL ID from future candidate matching; re-adding the same track in TIDAL clears its reversible exclusion on the next preview.
+- Ranked 80-to-50 candidate refill, including the phone replacement pool; insufficient safe matches fail closed.
+- Local reconciliation journal, backup, double-read verification, final live check and publisher recovery guard.
+- Offline GitHub Actions tests for reconciliation, candidate exclusion and refill.
+
+### Safety and limitations
+- **Monday remains preview-only.** Publishing still requires explicit review, approval, preflight and publish action.
+- More than ten additions/removals in a poll require manual investigation.
+- The exclusion is tied to the exact TIDAL track ID; different recordings/catalogue IDs of the same song are not automatically treated as equivalent.
+- Interrupted local reconciliation blocks subsequent previews/publishing pending supervised recovery.
+- This version has not been tested against the user's live Home Assistant/TIDAL environment. Do not enable until the user approves the upgrade and a supervised preview test.
+
 ## 0.2.2 — 2026-11-04
 
 ### Added

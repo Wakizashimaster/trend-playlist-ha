@@ -24,6 +24,8 @@ def atomic_json(path, value):
     os.replace(tmp, path)
 
 def publish(plan_file):
+    if (DATA / "manual_reconciliation_pending.json").exists():
+        raise RuntimeError("Unresolved manual reconciliation; publishing blocked")
     plan = json.loads(Path(plan_file).read_text(encoding="utf-8"))
     original = [str(x) for x in plan["original_ids"]]
     proposed = [str(x) for x in plan["proposed_ids"]]
