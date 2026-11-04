@@ -21,7 +21,7 @@ Trend Playlist is a community-maintained Home Assistant OS app (add-on) and HACS
 
 The current app targets **one configured-in-code playlist, Down with the Kids**. It is **not** a general-purpose multi-playlist integration. Publishing can alter your live playlist. A partial TIDAL/network failure may require supervised manual recovery; the app will not automatically retry or delete and recreate the playlist. Do not expose the app's API port to the internet.
 
-Zeitgeist selections are **recorded only** at present; publishing to the separate Zeitgeist playlist is not enabled. Gmail summaries and delivery notifications are planned, not yet implemented.
+Zeitgeist selections are **recorded only** at present; publishing to the separate Zeitgeist playlist is not enabled. Optional Home Assistant Gmail notification automation examples are available in [NOTIFICATIONS.md](NOTIFICATIONS.md). The app does not send Gmail messages directly.
 
 ## Installation
 
