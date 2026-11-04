@@ -320,6 +320,7 @@ def main(preview=False):
     changes = verify_plan(previous["track_ids"], proposed, market_rows)
     print(f"Verified changes: +{len(changes['added'])}, -{len(changes['removed'])}", flush=True)
     if preview:
+        verify_live_baseline(previous["track_ids"])
         print("PREVIEW ONLY: no TIDAL playlist changes; local review/approved/match CSVs were refreshed.", flush=True)
         print("Added TIDAL IDs: " + (", ".join(changes["added"]) or "(none)"), flush=True)
         print("Removed TIDAL IDs: " + (", ".join(changes["removed"]) or "(none)"), flush=True)
