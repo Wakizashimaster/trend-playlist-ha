@@ -56,3 +56,20 @@ as a Home Assistant add-on option and is not set by the worker. The path:
 No changed-playlist preview is accepted yet. The ordinary production preview
 still uses strict live-baseline verification. Do not enable the internal flag
 or deploy this branch. Unit tests are committed but not executed here.
+
+## Step 3 — ID-based candidate exclusion gate (committed)
+
+The TIDAL matching command now reads the reversible exclusion store for the
+protected playlist and **rejects** a proposal or replacement-pool match if it
+contains any excluded TIDAL track ID. The check runs before writing the match
+report, so a stale/partial report cannot be presented as a fresh successful
+preview. The existing permanent song/artist blocklist remains independent.
+
+This is a **fail-closed guard**, not automatic refilling: if an excluded ID
+appears in the top 50 or 80, the current candidate run fails instead of
+silently producing fewer tracks or choosing an alternate recording. The next
+milestone must implement safe eligible-candidate refill and atomic baseline/
+exclusion reconciliation before the user-requested Monday acceptance can work.
+
+Unit tests in `tests/test_candidate_exclusions.py` are committed but have
+not been executed in this session. No TIDAL mutation or production deployment.
