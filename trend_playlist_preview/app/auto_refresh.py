@@ -211,7 +211,8 @@ def main(preview=False):
             previous = commit_manual_reconciliation(
                 previous, reconciliation, pending_exclusions)
             # The old proposal/approval cannot be reused after a live edit.
-            for stale in ("phone_publish_locked.json", "phone_candidate_pool.csv",
+            for stale in ("phone_publish_locked.json", "phone_publish_preflight.json",
+                          "phone_review.json", "phone_candidate_pool.csv",
                           "match_report.csv", "approved.csv", "review.csv"):
                 (tp.DATA / stale).unlink(missing_ok=True)
             print("Manual TIDAL edits reconciled locally; fresh preview required", flush=True)
