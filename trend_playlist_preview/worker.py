@@ -18,6 +18,13 @@ os.environ["TREND_PLAYLIST_DATA"] = str(DATA)
 TOKEN = json.loads(Path("/data/options.json").read_text()).get("api_token", "")
 if len(TOKEN) < 24:
     sys.exit("Configure a random API token of at least 24 characters in add-on options")
+# Explicit add-on opt-in. Default installation retains strict baseline checks.
+if json.loads(Path("/data/options.json").read_text()).get("respect_manual_tidal_removals") is True:
+    os.environ["TREND_PLAYLIST_MANUAL_REMOVALS"] = "YES"
+    os.environ["TREND_PLAYLIST_REFILL"] = "YES"
+else:
+    os.environ.pop("TREND_PLAYLIST_MANUAL_REMOVALS", None)
+    os.environ.pop("TREND_PLAYLIST_REFILL", None)
 lock = threading.Lock()
 state = {"running": False, "last_run": None, "ok": None, "message": "Not run yet"}
 if REPORT.exists():
