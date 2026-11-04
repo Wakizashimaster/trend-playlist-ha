@@ -1,107 +1,144 @@
-# Home Assistant Gmail notification examples
+# Home Assistant notifications
 
-These optional automations use Home Assistant's existing Google Mail integration.
-No Google credentials belong in the Trend Playlist app or repository.
+Trend Playlist uses Home Assistant's existing notification actions, not Gmail credentials
+inside the app. You can use Google Mail or substitute any compatible notify action.
 
-## Before enabling
+## Setup
 
-1. Install and test the official Google Mail integration.
-2. In Developer Tools → States, identify the entity named **Trend Playlist preview**
-   (usually `sensor.trend_playlist_preview`). Substitute its actual entity ID below.
-3. In Developer Tools → Actions, identify your Gmail notify action. Replace
-   `notify.YOUR_GMAIL_NOTIFY_ACTION` with that exact action.
-4. Replace `YOUR_EMAIL_ADDRESS` with the destination email address.
-5. Add these automations via the YAML automation editor, or adapt them in
-   `automations.yaml`. Do not paste secrets into the YAML.
+1. Test the official Google Mail integration in **Developer Tools → Actions**.
+2. Find the entity ID for **Trend Playlist preview** in **Developer Tools → States**.
+   The default is `sensor.trend_playlist_preview`.
+3. Replace `notify.YOUR_GMAIL_ACTION` with your actual notification action, and
+   `YOUR_EMAIL` with your recipient address.
+4. Update both the Home Assistant app and HACS integration to **0.2.2** before
+   enabling the automations below.
 
-## Weekly preview completed
+The app exposes durable completion attributes on the preview sensor:
 
-Triggers on a new preview run timestamp, not on the sensor's generic state.
-The email is sent only for a successful run with a ready proposal.
+| Attribute | Meaning |
+| --- | --- |
+| `preview_result_at` | New timestamp after **every** completed preview, successful or failed |
+| `preview_result` | `success` or `failed` |
+| `publish_result_at` | New timestamp after **every** completed publishing attempt |
+| `publish_status` | `verified` or `failed` after completion |
+| `published_at` | Timestamp of the last verified publish; null after a failed attempt |
+
+A changed timestamp is a better trigger than a state that may remain `ready`
+or `failed` across successive runs. Do not use **Run actions** to test triggers;
+it bypasses automation conditions.
+
+## Preview ready
 
 ```yaml
-alias: Trend Playlist - preview ready email
+alias: Trend Playlist - preview ready
 mode: single
 triggers:
   - trigger: state
     entity_id: sensor.trend_playlist_preview
-    attribute: last_run
+    attribute: preview_result_at
 conditions:
   - condition: template
     value_template: >
-      {{ state_attr('sensor.trend_playlist_preview', 'ok') == true
-         and state_attr('sensor.trend_playlist_preview', 'review') is mapping
-         and state_attr('sensor.trend_playlist_preview', 'review').get('ready') == true }}
+      {{ trigger.from_state is not none
+         and trigger.to_state is not none
+         and trigger.to_state.attributes.get('preview_result') == 'success'
+         and trigger.to_state.attributes.get('review', {}).get('ready') == true }}
 actions:
-  - action: notify.YOUR_GMAIL_NOTIFY_ACTION
+  - action: notify.YOUR_GMAIL_ACTION
     data:
-      title: "Trend Playlist: review ready"
+      title: "Trendee: playlist preview ready"
       message: >
-        The Down with the Kids proposal is ready to review in Home Assistant.
-        Nothing has been published automatically.
+        A new Down with the Kids proposal is ready to review in Home Assistant.
+        No TIDAL changes have been published.
       target:
-        - YOUR_EMAIL_ADDRESS
+        - YOUR_EMAIL
 ```
 
-## Preview failure
+## Preview failed
 
 ```yaml
-alias: Trend Playlist - preview failed email
+alias: Trend Playlist - preview failed
 mode: single
 triggers:
   - trigger: state
     entity_id: sensor.trend_playlist_preview
-    attribute: last_run
+    attribute: preview_result_at
 conditions:
   - condition: template
     value_template: >
-      {{ state_attr('sensor.trend_playlist_preview', 'ok') == false }}
+      {{ trigger.from_state is not none
+         and trigger.to_state is not none
+         and trigger.to_state.attributes.get('preview_result') == 'failed' }}
 actions:
-  - action: notify.YOUR_GMAIL_NOTIFY_ACTION
+  - action: notify.YOUR_GMAIL_ACTION
     data:
-      title: "Trend Playlist: preview failed"
+      title: "Trendee: preview failed"
       message: >
-        The latest playlist preview failed. Check the Trend Playlist app logs
-        before retrying. No automatic publish was attempted.
+        The playlist preview failed. Check the Trend Playlist app logs.
+        Nothing was published automatically.
       target:
-        - YOUR_EMAIL_ADDRESS
+        - YOUR_EMAIL
 ```
 
 ## Publish verified
 
 ```yaml
-alias: Trend Playlist - publish verified email
+alias: Trend Playlist - publish verified
 mode: single
 triggers:
   - trigger: state
     entity_id: sensor.trend_playlist_preview
-    attribute: published_at
+    attribute: publish_result_at
 conditions:
   - condition: template
     value_template: >
-      {{ state_attr('sensor.trend_playlist_preview', 'publish_status') == 'verified'
-         and state_attr('sensor.trend_playlist_preview', 'published_at') not in [none, ''] }}
+      {{ trigger.from_state is not none
+         and trigger.to_state is not none
+         and trigger.to_state.attributes.get('publish_status') == 'verified' }}
 actions:
-  - action: notify.YOUR_GMAIL_NOTIFY_ACTION
+  - action: notify.YOUR_GMAIL_ACTION
     data:
-      title: "Trend Playlist: TIDAL publish verified"
+      title: "Trendee: TIDAL publish verified"
       message: >
-        The approved Down with the Kids playlist update has completed and
-        passed track verification. Check TIDAL for the final playlist.
+        The approved Down with the Kids playlist update completed and
+        passed track verification.
       target:
-        - YOUR_EMAIL_ADDRESS
+        - YOUR_EMAIL
 ```
 
-## Publish failure — important limitation
+## Publish failed — inspect before retrying
 
-The current worker does not persist a distinct timestamp for failed publish
-attempts. An automation watching `publish_status` can miss a short-lived
-`running` state between 30-second polls, particularly after an earlier
-failure. **Do not rely on an email as the sole failure alarm.** Inspect the
-app status and recovery journal after publishing. A durable publish-result
-event/timestamp is planned before enabling reliable failure alerts.
+```yaml
+alias: Trend Playlist - publish failed
+mode: single
+triggers:
+  - trigger: state
+    entity_id: sensor.trend_playlist_preview
+    attribute: publish_result_at
+conditions:
+  - condition: template
+    value_template: >
+      {{ trigger.from_state is not none
+         and trigger.to_state is not none
+         and trigger.to_state.attributes.get('publish_status') == 'failed' }}
+actions:
+  - action: notify.YOUR_GMAIL_ACTION
+    data:
+      title: "Trendee: publishing failed — action required"
+      message: >
+        A TIDAL publishing attempt failed. Do not retry publishing blindly.
+        Inspect the app logs and recovery journal and verify the live playlist
+        before taking any further action.
+      target:
+        - YOUR_EMAIL
+```
 
-## Safety
+## Reliability and safety
 
-These examples send notifications only. They do not call approval, preflight
-or publish actions, and they do not modify TIDAL.
+The result timestamps are persisted in the app configuration and survive app
+restarts. Home Assistant polls every 30 seconds. A notification can still be
+missed if Home Assistant is offline when a run completes or if an automation
+is disabled. These examples are not a guaranteed-delivery queue.
+
+Automations only send notifications. They never approve, preflight, or publish
+a playlist. The Google Mail integration is optional.
