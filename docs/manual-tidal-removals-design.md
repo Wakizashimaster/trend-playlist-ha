@@ -73,3 +73,21 @@ exclusion reconciliation before the user-requested Monday acceptance can work.
 
 Unit tests in `tests/test_candidate_exclusions.py` are committed but have
 not been executed in this session. No TIDAL mutation or production deployment.
+
+## Release candidate integration status (0.3.0)
+
+The earlier staged-only notes above describe development milestones and are
+superseded by this section. The opt-in Home Assistant option now enables
+stable live-playlist reconciliation, persistent reversible exclusions, ranked
+refill, stale approval invalidation, a final live-baseline verification, and
+publisher recovery checks. The feature is disabled by default.
+
+The GitHub Actions offline Python compile and unit-test job has passed on the
+development branch. It does **not** constitute live TIDAL or Home Assistant
+integration testing. The PR remains draft; do not merge or deploy without the
+user's approval. Supervised preview validation is the next external step.
+
+Known constraints: the exclusion is exact TIDAL track ID, not song identity;
+more than ten additions/removals fail closed; no automatic recovery from a
+partially committed local reconciliation; candidate refill fails if fewer
+than fifty safe matches remain.
