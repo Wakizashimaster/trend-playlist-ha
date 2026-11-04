@@ -2,6 +2,21 @@
 
 All notable user-facing changes are recorded here. Releases follow semantic versioning where practical. The Home Assistant app and HACS integration should be updated together.
 
+## 0.2.2 — 2026-11-04
+
+### Added
+- Persistent `preview_result_at` and `preview_result` attributes after every completed preview.
+- Persistent `publish_result_at` after every completed publishing attempt, including failures.
+- Four optional Home Assistant email automation examples in [NOTIFICATIONS.md](NOTIFICATIONS.md):
+  preview ready, preview failed, publish verified and publish failed.
+
+### Notes
+- Gmail is configured and authorised through Home Assistant, not this app.
+- Notifications are optional and do not approve or publish to TIDAL.
+- Existing preview-ready automations should be migrated to the new timestamp trigger.
+- Browser/app branding assets are being prepared separately and are **not included in 0.2.2**.
+- Notification delivery is best effort; Home Assistant downtime can miss events.
+
 ## 0.2.1 — 2026-11-03
 
 ### Added
