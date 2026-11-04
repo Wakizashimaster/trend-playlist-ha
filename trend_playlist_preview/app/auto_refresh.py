@@ -110,6 +110,35 @@ def live_playlist_ids():
     raise RuntimeError("TIDAL playlist exceeds safe read limit")
 
 
+
+def inspect_manual_edits(previous_ids):
+    """Stage a read-only reconciliation; never alter baseline or exclusions here.
+
+    Applying the plan is deliberately gated until the candidate-selection and
+    approval safeguards are wired in the following milestone.
+    """
+    import manual_exclusions as exclusions
+    journal_path = tp.DATA / "phone_publish_journal.json"
+    if journal_path.exists():
+        journal = json.loads(journal_path.read_text(encoding="utf-8"))
+        if journal.get("status") != "verified":
+            raise RuntimeError("Unresolved publish journal; manual reconciliation refused")
+    first = live_playlist_ids()
+    second = live_playlist_ids()
+    if first != second:
+        raise RuntimeError("Live playlist changed between reads; no reconciliation")
+    store = exclusions.load(tp.DATA / "manual_tidal_exclusions.json", PLAYLIST_ID)
+    result, updated = exclusions.plan(previous_ids, first, store)
+    changes = bool(result.removed_ids or result.restored_ids or result.added_ids or result.reordered)
+    if changes:
+        # Read-only diagnostic; intentionally not used as an approved baseline.
+        print("Manual TIDAL edit detected (read-only): "
+              f"removed={list(result.removed_ids)}, restored={list(result.restored_ids)}, "
+              f"added={list(result.added_ids)}, reordered={result.reordered}", flush=True)
+        print(f"Proposed reversible exclusions: {updated['excluded_ids']}", flush=True)
+    return result, updated
+
+
 def verify_live_baseline(expected):
     actual = live_playlist_ids()
     if actual != [str(x) for x in expected]:
@@ -131,6 +160,15 @@ def main(preview=False):
         raise RuntimeError("Unexpected baseline playlist")
     if previous.get("playlist_name") == "UK Trends":
         print("Migrating saved baseline name to Down with the Kids after live verification", flush=True)
+    if preview and os.environ.get("TREND_PLAYLIST_MANUAL_REMOVALS") == "YES":
+        reconciliation, pending_exclusions = inspect_manual_edits(previous["track_ids"])
+        if (reconciliation.removed_ids or reconciliation.added_ids
+                or reconciliation.restored_ids or reconciliation.reordered):
+            raise RuntimeError(
+                "Manual TIDAL edits verified, but reconciliation is staged only: "
+                "candidate exclusion and approval safeguards are not yet connected. "
+                "Saved baseline and exclusions unchanged; no TIDAL changes made.")
+        # No drift: preserve the existing strict baseline check and preview path.
     verify_live_baseline(previous["track_ids"])
     if preview:
         # Capture verified live metadata for human-readable removal review.
