@@ -39,3 +39,20 @@ Manual TIDAL removals are **reversible**, not permanent. Re-adding the same TIDA
 - Offline unit tests: `tests/test_manual_reconciliation.py`, `tests/test_manual_exclusions.py`.
 - **Not yet wired to the Monday preview or candidate matching.** The store does not itself authorize changing the trusted baseline. Safe reconciliation must validate the publish journal and two consistent live reads, back up the baseline, and commit changes with recovery semantics before enabling the feature.
 - The store is keyed by TIDAL track ID; song-level aliases and catalog alternatives require separate matching safeguards.
+
+## Step 2 — preview inspection boundary (committed)
+
+The preview pipeline now has an opt-in **internal** inspection path controlled by
+`TREND_PLAYLIST_MANUAL_REMOVALS=YES`. This environment flag is **not** exposed
+as a Home Assistant add-on option and is not set by the worker. The path:
+
+- refuses reconciliation if the publish recovery journal is unresolved;
+- reads the exact protected live playlist twice and rejects concurrent changes;
+- calculates reversible exclusions, restorations, additions and reordering;
+- logs a read-only diagnostic without changing baseline, exclusion store, or TIDAL;
+- deliberately **stops** on detected edits until candidate filtering and safe
+  baseline/exclusion persistence are implemented in step 3.
+
+No changed-playlist preview is accepted yet. The ordinary production preview
+still uses strict live-baseline verification. Do not enable the internal flag
+or deploy this branch. Unit tests are committed but not executed here.
