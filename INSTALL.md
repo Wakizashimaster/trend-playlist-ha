@@ -45,3 +45,31 @@ The live playlist must still match its saved baseline immediately before publish
 - No missed-Monday-run catch-up; an always-on Home Assistant host is recommended.
 - No automatic recovery from a partially applied TIDAL update.
 - The app API is authenticated but **not HTTPS** on its LAN port; do not expose it beyond your trusted network.
+
+## 0.3.0 candidate: respecting manual TIDAL edits (opt-in)
+
+**Do not install this candidate from the development branch or enable it until
+the release is approved.** The add-on and HACS integration version must match.
+
+Once released and installed, open the Trend Playlist app's **Configuration**
+tab and set `respect_manual_tidal_removals: true`; save and restart the app.
+The default is `false`, retaining the previous strict-baseline behaviour.
+
+A manual or Monday preview then compares the saved verified track sequence
+with repeated reads of the protected live TIDAL playlist. A removed TIDAL track
+ID becomes an automatic reversible exclusion; re-adding the exact ID clears
+that exclusion on the next preview. A different recording or alternate TIDAL
+ID is not treated as the same track. Explicit Home Assistant song blocks are
+permanent and separate.
+
+The feature never edits TIDAL during preview. Every actual playlist update
+still requires the usual review, approval, preflight and explicit publish.
+Manual additions to the live playlist become part of the verified baseline.
+If too many changes are detected, reads disagree, a publish journal is
+unresolved, or local reconciliation is interrupted, the preview stops and
+requires investigation. **Do not delete recovery markers to force a retry.**
+
+For the first test after upgrading, leave the option disabled until you have
+a current backup and a successful normal preview. Enable it and run a manual
+preview without changing the live playlist; check the review before trying a
+single controlled manual removal. Do not publish during this test.
