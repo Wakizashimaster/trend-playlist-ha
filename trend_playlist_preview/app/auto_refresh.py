@@ -219,16 +219,42 @@ def main(preview=False):
             f"apple={apple_rows}, spotify={spotify_rows}); retaining existing playlist")
     if market_rows < MIN_MARKET_ROWS:
         raise RuntimeError("Insufficient chart data; retaining existing playlist")
-    run("apply")
+    refill = preview and os.environ.get("TREND_PLAYLIST_REFILL") == "YES"
+    if refill and os.environ.get("TREND_PLAYLIST_MANUAL_REMOVALS") != "YES":
+        raise RuntimeError("Refill requires manual-removal inspection to be enabled")
+    if refill:
+        # Generate a ranked 80-track candidate set before choosing the 50.
+        run("apply", "--size", "80")
+        os.environ["TREND_PLAYLIST_REFILL"] = "YES"
+    else:
+        run("apply")
     run("push", "--name", "Down with the Kids", "--dry-run")
     report = tp.read_csv(tp.MATCH_REPORT)
+    if refill:
+        excluded = tp.manual_excluded_track_ids()
+        chosen = tp.refill_from_ranked_matches(report, excluded, target=50)
+        chosen_pairs = {(r["artist"], r["title"]) for r in chosen}
+        approved = tp.read_csv(tp.APPROVED)
+        if len(chosen_pairs) != 50:
+            raise RuntimeError("Ambiguous ranked refill identities")
+        approved_50 = [r for r in approved if (r["artist"], r["title"]) in chosen_pairs]
+        if len(approved_50) != 50:
+            raise RuntimeError("Ranked refill does not match approved rows")
+        reserve = [r for r in report if r.get("status") == "matched"
+                   and r.get("decision") != "reject"
+                   and r.get("tidal_id") not in excluded]
+        tp.write_csv(tp.DATA / "phone_candidate_pool.csv", tp.MATCH_FIELDS, reserve)
+        tp.write_csv(tp.APPROVED, ["artist", "title", "key"], approved_50)
+        tp.write_csv(tp.MATCH_REPORT, tp.MATCH_FIELDS, chosen)
+        report = chosen
+        print(f"Ranked refill selected 50 of {len(reserve)} eligible matches", flush=True)
     if not report or any(r.get("status") != "matched" or r.get("decision") == "reject"
                          for r in report):
         raise RuntimeError("Unresolved TIDAL match; retaining existing playlist")
     proposed = [r["tidal_id"] for r in report]
     # Generate an independently matched reserve pool for phone exclusions.
     # Preserve the verified 50-track files even if reserve matching fails.
-    if preview:
+    if preview and not refill:
         approved_bytes = tp.APPROVED.read_bytes()
         report_bytes = tp.MATCH_REPORT.read_bytes()
         try:
