@@ -31,3 +31,11 @@ Develop and test on this feature branch. Do not merge or enable on the live Home
 ## Revised user decision (2026-11-04)
 
 Manual TIDAL removals are **reversible**, not permanent. Re-adding the same TIDAL track ID to the live playlist clears its automatic exclusion on the next successful preview. A Trendee explicit song block remains permanent. A re-added song becomes eligible, not guaranteed a place in the top 50. The pure reconciliation policy and offline unit tests are now on this branch; wiring into live preview, safe persistence, and candidate selection is still pending.
+
+## Implementation progress
+
+- Pure reconciliation policy: `trend_playlist_preview/app/manual_reconciliation.py`.
+- Durable reversible exclusion store: `trend_playlist_preview/app/manual_exclusions.py` (atomic JSON writes and timestamped events).
+- Offline unit tests: `tests/test_manual_reconciliation.py`, `tests/test_manual_exclusions.py`.
+- **Not yet wired to the Monday preview or candidate matching.** The store does not itself authorize changing the trusted baseline. Safe reconciliation must validate the publish journal and two consistent live reads, back up the baseline, and commit changes with recovery semantics before enabling the feature.
+- The store is keyed by TIDAL track ID; song-level aliases and catalog alternatives require separate matching safeguards.
