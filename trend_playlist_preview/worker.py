@@ -26,6 +26,7 @@ if REPORT.exists():
     except (OSError, ValueError):
         pass
 state["running"] = False
+# Stable, persisted completion identifiers let HA automations deduplicate notifications.
 
 def run_preview():
     if not lock.acquire(blocking=False):
@@ -38,9 +39,14 @@ def run_preview():
             cwd=ROOT, env=os.environ.copy(), capture_output=True, text=True, timeout=7200)
         state.update(last_run=datetime.now(ZoneInfo("Europe/London")).isoformat(),
             ok=result.returncode == 0, message=(result.stdout + "\n" + result.stderr)[-5000:])
+        state["preview_result_at"] = state["last_run"]
+        state["preview_result"] = "success" if result.returncode == 0 else "failed"
         REPORT.write_text(json.dumps({k:v for k,v in state.items() if k != "running"}, indent=2))
     except Exception as exc:
         state.update(ok=False, message=str(exc), last_run=datetime.now(ZoneInfo("Europe/London")).isoformat())
+        state["preview_result_at"] = state["last_run"]
+        state["preview_result"] = "failed"
+        REPORT.write_text(json.dumps({k:v for k,v in state.items() if k != "running"}, indent=2))
     finally:
         state["running"] = False
         lock.release()
@@ -51,6 +57,7 @@ def run_publish(plan):
         return False
     state["running"] = True
     state["publish_status"] = "running"
+    state["publish_started_at"] = datetime.now(ZoneInfo("Europe/London")).isoformat()
     try:
         path = DATA / "phone_publish_locked.json"
         tmp = path.with_suffix(".tmp")
@@ -60,13 +67,16 @@ def run_publish(plan):
             cwd=ROOT, env=os.environ.copy(), capture_output=True, text=True, timeout=600)
         state["publish_status"] = "verified" if result.returncode == 0 else "failed"
         state["publish_message"] = (result.stdout + "\\n" + result.stderr)[-4000:]
-        state["published_at"] = datetime.now(ZoneInfo("Europe/London")).isoformat() if result.returncode == 0 else None
+        state["publish_result_at"] = datetime.now(ZoneInfo("Europe/London")).isoformat()
+        state["published_at"] = state["publish_result_at"] if result.returncode == 0 else None
         if result.returncode == 0:
             state["ok"] = False  # Published proposal is no longer a valid preview.
         REPORT.write_text(json.dumps({k:v for k,v in state.items() if k != "running"}, indent=2))
     except Exception as exc:
         state["publish_status"] = "failed"
         state["publish_message"] = str(exc)
+        state["publish_result_at"] = datetime.now(ZoneInfo("Europe/London")).isoformat()
+        REPORT.write_text(json.dumps({k:v for k,v in state.items() if k != "running"}, indent=2))
     finally:
         state["running"] = False
         lock.release()
