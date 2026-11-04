@@ -827,7 +827,13 @@ def cmd_push(args) -> None:
     # 80-track replacement pool. Check IDs before either result is persisted.
     # Existing permanent song/artist blocks remain enforced by select/apply.
     if args.name == "Down with the Kids":
-        reject_manual_exclusions(report, manual_excluded_track_ids())
+        excluded = manual_excluded_track_ids()
+        if os.environ.get("TREND_PLAYLIST_REFILL") == "YES" and args.dry_run:
+            # Ranked refill is applied by the caller to the full dry-run
+            # report; no excluded ID is ever written to a final proposal.
+            print(f"Ranked refill enabled: {len(excluded)} reversible exclusions", flush=True)
+        else:
+            reject_manual_exclusions(report, excluded)
     write_csv(MATCH_REPORT, MATCH_FIELDS, report)
     write_csv(MATCH_CANDIDATES, CANDIDATE_FIELDS, diagnostics)
     print(f"diagnostic candidates: {MATCH_CANDIDATES}")
