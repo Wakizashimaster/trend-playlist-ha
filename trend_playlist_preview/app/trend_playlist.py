@@ -738,6 +738,30 @@ def manual_excluded_track_ids():
         "ac2a24f5-a386-40cb-a637-ad9f89f32622")["excluded_ids"])
 
 
+def refill_from_ranked_matches(rows, excluded_ids, *, target=50):
+    """Take the highest-ranked eligible matches, preserving original order.
+
+    This never invents a TIDAL match, substitutes a recording, or returns a
+    short playlist. Unmatched/review-required rows are not silently accepted.
+    """
+    if target < 1:
+        raise ValueError("Target must be positive")
+    selected, seen = [], set()
+    for row in rows:
+        tid = str(row.get("tidal_id") or "")
+        if (not tid or tid in excluded_ids or tid in seen
+                or row.get("status") != "matched"
+                or row.get("decision") == "reject"):
+            continue
+        seen.add(tid)
+        selected.append(row)
+        if len(selected) == target:
+            return selected
+    raise RuntimeError(
+        f"Only {len(selected)} eligible matched TIDAL tracks for target {target}; "
+        "cannot safely refill playlist")
+
+
 def reject_manual_exclusions(rows, excluded_ids):
     """Fail closed if matching resolves any excluded ID.
 
