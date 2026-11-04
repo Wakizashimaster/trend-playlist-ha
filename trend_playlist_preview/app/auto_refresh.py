@@ -139,6 +139,45 @@ def inspect_manual_edits(previous_ids):
     return result, updated
 
 
+
+def commit_manual_reconciliation(previous, result, updated):
+    """Journal local-only changes; fail closed if interrupted mid-commit.
+
+    Never modifies TIDAL. The transaction marker is cleared only when both
+    local files have been durably replaced. An interrupted transaction must
+    be inspected rather than automatically replayed.
+    """
+    import manual_exclusions as exclusions
+    marker = tp.DATA / "manual_reconciliation_pending.json"
+    if marker.exists():
+        raise RuntimeError("Unresolved manual reconciliation; inspect local recovery marker")
+    before = [str(x) for x in previous["track_ids"]]
+    live = list(result.live_ids)
+    if live_playlist_ids() != live:
+        raise RuntimeError("Live playlist changed before reconciliation commit")
+    store_path = tp.DATA / "manual_tidal_exclusions.json"
+    backup = tp.DATA / "manual_reconciliation_backup.json"
+    if backup.exists():
+        raise RuntimeError("Existing manual reconciliation backup; inspect before continuing")
+    backup_data = {"baseline": previous,
+                   "exclusions": exclusions.load(store_path, PLAYLIST_ID)}
+    exclusions.atomic_write(backup, backup_data)
+    exclusions.atomic_write(marker, {"status": "started",
+                                     "playlist_id": PLAYLIST_ID,
+                                     "previous_ids": before, "live_ids": live})
+    new_baseline = {**previous, "playlist_id": PLAYLIST_ID,
+                    "playlist_name": "Down with the Kids", "track_ids": live,
+                    "updated_at": datetime.now(timezone.utc).isoformat()}
+    # Both writes are atomic individually, but not as a pair. The marker
+    # prevents trusting partially committed state after an interruption.
+    exclusions.atomic_write(store_path, updated)
+    save_state(new_baseline)
+    marker.unlink()
+    backup.unlink()
+    return new_baseline
+
+
+
 def verify_live_baseline(expected):
     actual = live_playlist_ids()
     if actual != [str(x) for x in expected]:
@@ -160,15 +199,22 @@ def main(preview=False):
         raise RuntimeError("Unexpected baseline playlist")
     if previous.get("playlist_name") == "UK Trends":
         print("Migrating saved baseline name to Down with the Kids after live verification", flush=True)
+    pending_marker = tp.DATA / "manual_reconciliation_pending.json"
+    if pending_marker.exists():
+        raise RuntimeError("Unresolved manual reconciliation; inspect recovery marker")
     if preview and os.environ.get("TREND_PLAYLIST_MANUAL_REMOVALS") == "YES":
+        if os.environ.get("TREND_PLAYLIST_REFILL") != "YES":
+            raise RuntimeError("Manual edit acceptance requires ranked candidate refill")
         reconciliation, pending_exclusions = inspect_manual_edits(previous["track_ids"])
         if (reconciliation.removed_ids or reconciliation.added_ids
                 or reconciliation.restored_ids or reconciliation.reordered):
-            raise RuntimeError(
-                "Manual TIDAL edits verified, but reconciliation is staged only: "
-                "candidate exclusion and approval safeguards are not yet connected. "
-                "Saved baseline and exclusions unchanged; no TIDAL changes made.")
-        # No drift: preserve the existing strict baseline check and preview path.
+            previous = commit_manual_reconciliation(
+                previous, reconciliation, pending_exclusions)
+            # The old proposal/approval cannot be reused after a live edit.
+            for stale in ("phone_publish_locked.json", "phone_candidate_pool.csv",
+                          "match_report.csv", "approved.csv", "review.csv"):
+                (tp.DATA / stale).unlink(missing_ok=True)
+            print("Manual TIDAL edits reconciled locally; fresh preview required", flush=True)
     verify_live_baseline(previous["track_ids"])
     if preview:
         # Capture verified live metadata for human-readable removal review.
