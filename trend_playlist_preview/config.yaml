@@ -12,8 +12,10 @@ map:
   - addon_config:rw
 options:
   api_token: ""
+  respect_manual_tidal_removals: false
 schema:
   api_token: password
+  respect_manual_tidal_removals: bool
 ports:
   8099/tcp: 8099
 ports_description:
