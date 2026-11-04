@@ -1,5 +1,5 @@
 name: Trend Playlist
-version: "0.2.2"
+version: "0.3.0"
 slug: trend_playlist_preview
 description: Review UK music trends and explicitly approve guarded in-place TIDAL playlist updates
 arch:
