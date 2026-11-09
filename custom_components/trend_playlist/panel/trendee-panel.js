@@ -12,6 +12,9 @@ class TrendeePanel extends HTMLElement {
     this.render();
   }
   connectedCallback() { this.render(); }
+  _openSidebar() {
+    this.dispatchEvent(new Event("hass-toggle-menu", { bubbles: true, composed: true }));
+  }
   render() {
     const state = this._hass?.states?.["sensor.trend_playlist_preview"];
     const a = state?.attributes || {};
@@ -24,7 +27,11 @@ class TrendeePanel extends HTMLElement {
       <style>
         :host { display:block; color:var(--primary-text-color); background:var(--primary-background-color); min-height:100%; }
         main { max-width:1000px; margin:0 auto; padding:clamp(16px,4vw,36px); }
-        h1 { font-size:1.8rem; margin:0 0 6px; }
+        header { display:flex; align-items:center; gap:12px; margin-bottom:18px; }
+        h1 { font-size:1.8rem; margin:0; }
+        .menu { display:none; color:var(--primary-text-color); background:none; border:0; border-radius:8px; padding:10px; font-size:1.25rem; cursor:pointer; }
+        .menu:focus-visible { outline:2px solid var(--primary-color); }
+        @media (max-width: 870px) { .menu { display:inline-flex; } }
         p { color:var(--secondary-text-color); }
         .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-top:24px; }
         .card { background:var(--card-background-color); border:1px solid var(--divider-color); border-radius:14px; padding:20px; }
@@ -33,7 +40,7 @@ class TrendeePanel extends HTMLElement {
         .note { font-size:.9rem; margin-top:24px; }
       </style>
       <main>
-        <h1>Trendee</h1>
+        <header><button type="button" class="menu" aria-label="Open Home Assistant menu">☰</button><h1>Trendee</h1></header>
         <p>Down with the Kids · Home Assistant control centre</p>
         <div class="grid">
           <section class="card"><div class="label">Worker</div><div class="value">${esc(!state ? "Unavailable" : busy ? "Busy" : "Idle")}</div></section>
@@ -47,6 +54,7 @@ class TrendeePanel extends HTMLElement {
         </section>
         <p class="note">Milestone A preview: read-only status. Playlist browsing, controls and exclusions arrive in later milestones. No action on this page can change TIDAL.</p>
       </main>`;
+    this.shadowRoot.querySelector(".menu").addEventListener("click", () => this._openSidebar());
   }
 }
 if (!customElements.get("trendee-panel")) customElements.define("trendee-panel", TrendeePanel);
