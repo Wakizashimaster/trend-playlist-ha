@@ -5,7 +5,7 @@ No worker token, TIDAL credentials, or mutation endpoints are exposed.
 """
 from pathlib import Path
 
-from homeassistant.components import panel_custom
+from homeassistant.components import frontend, panel_custom
 from homeassistant.components.http import StaticPathConfig
 
 PANEL_PATH = "trendee"
@@ -29,4 +29,4 @@ async def async_register_trendee_panel(hass):
 
 
 async def async_unregister_trendee_panel(hass):
-    hass.components.frontend.async_remove_panel(PANEL_PATH)
+    frontend.async_remove_panel(hass, PANEL_PATH, warn_if_unknown=False)
