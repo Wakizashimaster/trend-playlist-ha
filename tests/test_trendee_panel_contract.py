@@ -16,12 +16,15 @@ class TestPanelContract(unittest.TestCase):
         self.assertNotIn("publish_commit", text)
         self.assertNotIn("api_token", text)
         self.assertNotIn("tidalapi", text)
+        self.assertIn("hass-toggle-menu", text)
+        self.assertIn("Open Home Assistant menu", text)
 
     def test_panel_registration_is_local(self):
         text = PY.read_text(encoding="utf-8")
         self.assertIn('frontend_url_path=PANEL_PATH', text)
         self.assertIn('module_url=STATIC_URL', text)
         self.assertIn('async_unregister_trendee_panel', text)
+        self.assertIn('frontend.async_remove_panel(hass, PANEL_PATH', text)
 
 if __name__ == "__main__":
     unittest.main()
