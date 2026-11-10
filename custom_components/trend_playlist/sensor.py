@@ -4,7 +4,8 @@ from .const import DOMAIN
 
 async def async_setup_entry(hass, entry, async_add_entities):
     coordinator, _ = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([PreviewStatus(coordinator, entry.entry_id), ProposalReview(coordinator, entry.entry_id)])
+    playlist = hass.data[DOMAIN + "_playlist"][entry.entry_id]
+    async_add_entities([PreviewStatus(coordinator, entry.entry_id), ProposalReview(coordinator, entry.entry_id), PlaylistTracks(playlist, entry.entry_id)])
 
 class PreviewStatus(CoordinatorEntity, SensorEntity):
     _attr_name = "Trend Playlist preview"
@@ -36,3 +37,25 @@ class ProposalReview(CoordinatorEntity, SensorEntity):
         if not review.get("ready"):
             return {"reason": review.get("reason", "Review not available yet")}
         return {k: v for k, v in review.items() if k != "review_candidates"}
+
+
+class PlaylistTracks(CoordinatorEntity, SensorEntity):
+    """Separate read-only snapshot, refreshed every ten minutes."""
+    _attr_name = "Trendee playlist tracks"
+    _attr_icon = "mdi:playlist-music"
+
+    def __init__(self, coordinator, entry_id):
+        super().__init__(coordinator)
+        self._attr_unique_id = entry_id + "_playlist_tracks"
+
+    @property
+    def native_value(self):
+        if not self.coordinator.last_update_success:
+            return "unavailable"
+        return len(self.coordinator.data.get("tracks", []))
+
+    @property
+    def extra_state_attributes(self):
+        if not self.coordinator.last_update_success or not self.coordinator.data:
+            return {"ready": False, "reason": "Live playlist temporarily unavailable"}
+        return {"ready": True, **self.coordinator.data}
