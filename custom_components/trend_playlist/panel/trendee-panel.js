@@ -18,6 +18,9 @@ class TrendeePanel extends HTMLElement {
   render() {
     const state = this._hass?.states?.["sensor.trend_playlist_preview"];
     const a = state?.attributes || {};
+    const playlist = this._hass?.states?.["sensor.trendee_playlist_tracks"];
+    const pa = playlist?.attributes || {};
+    const tracks = pa.ready === true && Array.isArray(pa.tracks) ? pa.tracks : [];
     const esc = (v) => String(v ?? "Unavailable").replace(/[&<>"']/g, c => ({
       "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
     }[c]));
@@ -38,6 +41,14 @@ class TrendeePanel extends HTMLElement {
         .label { color:var(--secondary-text-color); font-size:.85rem; margin-bottom:10px; }
         .value { font-size:1.2rem; font-weight:600; overflow-wrap:anywhere; }
         .note { font-size:.9rem; margin-top:24px; }
+        .track { display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--divider-color); }
+        .track:last-child { border-bottom:0; }
+        .cover { width:48px; height:48px; border-radius:6px; object-fit:cover; flex-shrink:0; background:var(--secondary-background-color); }
+        .track-text { min-width:0; flex:1; overflow-wrap:anywhere; }
+        .track-sub { color:var(--secondary-text-color); font-size:.85rem; margin-top:3px; }
+        .track-number { color:var(--secondary-text-color); width:24px; flex-shrink:0; }
+        .search { width:100%; box-sizing:border-box; padding:12px; margin:12px 0; border-radius:8px; border:1px solid var(--divider-color); background:var(--card-background-color); color:var(--primary-text-color); font:inherit; }
+        a { color:var(--primary-color); }
       </style>
       <main>
         <header><button type="button" class="menu" aria-label="Open Home Assistant menu">☰</button><h1>Trendee</h1></header>
@@ -52,9 +63,21 @@ class TrendeePanel extends HTMLElement {
           <div class="label">Publish details</div>
           <div style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(a.publish_message ?? "No publish details available")}</div>
         </section>
-        <p class="note">Milestone A preview: read-only status. Playlist browsing, controls and exclusions arrive in later milestones. No action on this page can change TIDAL.</p>
+        <section class="card" style="margin-top:16px">
+          <h2>Down with the Kids · Playlist</h2>
+          <p>${pa.ready === true ? `${tracks.length} tracks · Live TIDAL snapshot (refreshes every 10 minutes)` : "Live playlist not available yet. The worker may need updating."}</p>
+          ${pa.ready === true ? `<input class="search" type="search" placeholder="Search tracks or artists" aria-label="Search playlist" /><div class="tracks">${tracks.map(t => `<div class="track" data-search="${esc(`${t.title || ""} ${t.artist || ""} ${t.album || ""}`.toLowerCase())}"><span class="track-number">${esc(t.position)}</span>${t.artwork_url && /^https:\/\//.test(t.artwork_url) ? `<img class="cover" loading="lazy" src="${esc(t.artwork_url)}" alt="" />` : `<span class="cover"></span>`}<div class="track-text"><strong>${esc(t.title)}</strong><div class="track-sub">${esc(t.artist)} · ${esc(t.album)}</div></div><a href="https://tidal.com/browse/track/${encodeURIComponent(String(t.tidal_id ?? ""))}" target="_blank" rel="noopener noreferrer" aria-label="Open ${esc(t.title)} in TIDAL">TIDAL</a></div>`).join("")}</div>` : ""}
+        </section>
+        <p class="note">Read-only playlist view. No action on this page can change TIDAL.</p>
       </main>`;
     this.shadowRoot.querySelector(".menu").addEventListener("click", () => this._openSidebar());
+    const search = this.shadowRoot.querySelector(".search");
+    if (search) search.addEventListener("input", () => {
+      const query = search.value.trim().toLowerCase();
+      this.shadowRoot.querySelectorAll(".track").forEach(row => {
+        row.hidden = !row.dataset.search.includes(query);
+      });
+    });
   }
 }
 if (!customElements.get("trendee-panel")) customElements.define("trendee-panel", TrendeePanel);
