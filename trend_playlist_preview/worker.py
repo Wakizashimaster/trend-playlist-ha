@@ -213,6 +213,14 @@ class Handler(BaseHTTPRequestHandler):
             return self.respond(401, {"error": "unauthorized"})
         if self.path == "/status":
             return self.respond(200, dict(state))
+        if self.path == "/playlist":
+            try:
+                from playlist_snapshot import read_playlist
+                import trend_playlist as tp
+                return self.respond(200, read_playlist(tp.SESSION_FILE))
+            except Exception:
+                # Fail closed; never return TIDAL credentials or raw exception details.
+                return self.respond(503, {"error": "Playlist temporarily unavailable"})
         if self.path == "/review":
             try:
                 return self.respond(200, build_review())
