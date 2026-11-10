@@ -26,6 +26,7 @@ class TrendeePanel extends HTMLElement {
     }[c]));
     const published = a.published_at ? new Date(a.published_at).toLocaleString() : "Not yet published";
     const busy = a.running === true;
+    const previousSearch = this.shadowRoot.querySelector(".search")?.value || "";
     this.shadowRoot.innerHTML = `
       <style>
         :host { display:block; color:var(--primary-text-color); background:var(--primary-background-color); min-height:100%; }
@@ -43,6 +44,7 @@ class TrendeePanel extends HTMLElement {
         .note { font-size:.9rem; margin-top:24px; }
         .track { display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--divider-color); }
         .track:last-child { border-bottom:0; }
+        .track[hidden] { display:none; }
         .cover { width:48px; height:48px; border-radius:6px; object-fit:cover; flex-shrink:0; background:var(--secondary-background-color); }
         .track-text { min-width:0; flex:1; overflow-wrap:anywhere; }
         .track-sub { color:var(--secondary-text-color); font-size:.85rem; margin-top:3px; }
@@ -72,12 +74,16 @@ class TrendeePanel extends HTMLElement {
       </main>`;
     this.shadowRoot.querySelector(".menu").addEventListener("click", () => this._openSidebar());
     const search = this.shadowRoot.querySelector(".search");
-    if (search) search.addEventListener("input", () => {
+    if (search) {
+      search.value = previousSearch;
+      search.addEventListener("input", () => {
       const query = search.value.trim().toLowerCase();
       this.shadowRoot.querySelectorAll(".track").forEach(row => {
         row.hidden = !row.dataset.search.includes(query);
       });
-    });
+      });
+      search.dispatchEvent(new Event("input"));
+    }
   }
 }
 if (!customElements.get("trendee-panel")) customElements.define("trendee-panel", TrendeePanel);
