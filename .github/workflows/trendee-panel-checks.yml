@@ -5,6 +5,7 @@ on:
       - "custom_components/trend_playlist/**"
       - "tests/test_trendee_panel_contract.py"
       - "tests/test_playlist_snapshot.py"
+      - "tests/test_trendee_playlist_contract.py"
       - "trend_playlist_preview/**"
       - ".github/workflows/trendee-panel-checks.yml"
   workflow_dispatch:
@@ -27,5 +28,7 @@ jobs:
         run: node --check custom_components/trend_playlist/panel/trendee-panel.js
       - name: Read-only playlist snapshot tests
         run: python -m unittest discover -s tests -p test_playlist_snapshot.py -v
+      - name: Offline playlist UI contract
+        run: python -m unittest discover -s tests -p test_trendee_playlist_contract.py -v
       - name: Offline panel contract
         run: python -m unittest discover -s tests -p test_trendee_panel_contract.py -v
