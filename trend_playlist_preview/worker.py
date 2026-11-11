@@ -12,6 +12,10 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 ROOT = Path("/opt/trend")
+# The add-on copies application modules here, while this worker runs from /worker.py.
+# Make those modules importable by the read-only /playlist handler.
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 DATA = Path("/config")
 REPORT = DATA / "ha_preview_status.json"
 os.environ["TREND_PLAYLIST_DATA"] = str(DATA)
