@@ -58,4 +58,12 @@ class PlaylistTracks(CoordinatorEntity, SensorEntity):
     def extra_state_attributes(self):
         if not self.coordinator.last_update_success or not self.coordinator.data:
             return {"ready": False, "reason": "Live playlist temporarily unavailable"}
-        return {"ready": True, **self.coordinator.data}
+        data = self.coordinator.data
+        # No track metadata in entity state: avoids recorder/database bloat.
+        return {
+            "ready": True,
+            "playlist_id": data["playlist_id"],
+            "playlist_name": data["playlist_name"],
+            "source": data["source"],
+            "track_count": data["track_count"],
+        }
