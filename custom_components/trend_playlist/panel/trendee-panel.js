@@ -6,12 +6,38 @@ class TrendeePanel extends HTMLElement {
     super();
     this.attachShadow({mode: "open"});
     this._hass = null;
+    this._playlistData = null;
+    this._playlistVersion = null;
+    this._playlistPending = false;
   }
   set hass(value) {
     this._hass = value;
     this.render();
+    this._loadPlaylist();
+
   }
-  connectedCallback() { this.render(); }
+  connectedCallback() { this.render(); this._loadPlaylist(); }
+  async _loadPlaylist() {
+    const state = this._hass?.states?.["sensor.trendee_playlist_tracks"];
+    if (!state || state.attributes?.ready !== true || !this._hass?.callWS) return;
+    const version = state.last_updated;
+    if (this._playlistPending || this._playlistVersion === version) return;
+    this._playlistPending = true;
+    try {
+      const data = await this._hass.callWS({type: "trendee/playlist"});
+      if (data?.source !== "live_tidal_read_only" ||
+          data?.playlist_id !== state.attributes.playlist_id ||
+          !Array.isArray(data?.tracks)) throw new Error("Invalid playlist snapshot");
+      this._playlistData = data;
+      this._playlistVersion = version;
+    } catch (err) {
+      this._playlistData = null;
+      this._playlistVersion = version;
+    } finally {
+      this._playlistPending = false;
+      this.render();
+    }
+  }
   _openSidebar() {
     this.dispatchEvent(new Event("hass-toggle-menu", { bubbles: true, composed: true }));
   }
@@ -20,7 +46,7 @@ class TrendeePanel extends HTMLElement {
     const a = state?.attributes || {};
     const playlist = this._hass?.states?.["sensor.trendee_playlist_tracks"];
     const pa = playlist?.attributes || {};
-    const tracks = pa.ready === true && Array.isArray(pa.tracks) ? pa.tracks : [];
+    const tracks = pa.ready === true && Array.isArray(this._playlistData?.tracks) ? this._playlistData.tracks : [];
     const esc = (v) => String(v ?? "Unavailable").replace(/[&<>"']/g, c => ({
       "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
     }[c]));
@@ -67,8 +93,8 @@ class TrendeePanel extends HTMLElement {
         </section>
         <section class="card" style="margin-top:16px">
           <h2>Down with the Kids · Playlist</h2>
-          <p>${pa.ready === true ? `${tracks.length} tracks · Live TIDAL snapshot (refreshes every 10 minutes)` : "Live playlist not available yet. The worker may need updating."}</p>
-          ${pa.ready === true ? `<input class="search" type="search" placeholder="Search tracks or artists" aria-label="Search playlist" /><div class="tracks">${tracks.map(t => `<div class="track" data-search="${esc(`${t.title || ""} ${t.artist || ""} ${t.album || ""}`.toLowerCase())}"><span class="track-number">${esc(t.position)}</span>${t.artwork_url && /^https:\/\//.test(t.artwork_url) ? `<img class="cover" loading="lazy" src="${esc(t.artwork_url)}" alt="" />` : `<span class="cover"></span>`}<div class="track-text"><strong>${esc(t.title)}</strong><div class="track-sub">${esc(t.artist)} · ${esc(t.album)}</div></div><a href="https://tidal.com/browse/track/${encodeURIComponent(String(t.tidal_id ?? ""))}" target="_blank" rel="noopener noreferrer" aria-label="Open ${esc(t.title)} in TIDAL">TIDAL</a></div>`).join("")}</div>` : ""}
+          <p>${pa.ready === true && this._playlistData ? `${tracks.length} tracks · Live TIDAL snapshot (refreshes every 10 minutes)` : "Live playlist not available yet. The worker may need updating."}</p>
+          ${pa.ready === true && this._playlistData ? `<input class="search" type="search" placeholder="Search tracks or artists" aria-label="Search playlist" /><div class="tracks">${tracks.map(t => `<div class="track" data-search="${esc(`${t.title || ""} ${t.artist || ""} ${t.album || ""}`.toLowerCase())}"><span class="track-number">${esc(t.position)}</span>${t.artwork_url && /^https:\/\//.test(t.artwork_url) ? `<img class="cover" loading="lazy" src="${esc(t.artwork_url)}" alt="" />` : `<span class="cover"></span>`}<div class="track-text"><strong>${esc(t.title)}</strong><div class="track-sub">${esc(t.artist)} · ${esc(t.album)}</div></div><a href="https://tidal.com/browse/track/${encodeURIComponent(String(t.tidal_id ?? ""))}" target="_blank" rel="noopener noreferrer" aria-label="Open ${esc(t.title)} in TIDAL">TIDAL</a></div>`).join("")}</div>` : ""}
         </section>
         <p class="note">Read-only playlist view. No action on this page can change TIDAL.</p>
       </main>`;
