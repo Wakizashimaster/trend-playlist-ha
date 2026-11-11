@@ -59,6 +59,17 @@ class PlaylistSnapshotTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "authentication"):
             snapshot.read_playlist(Path("/unused"))
 
+    def test_worker_can_import_modules_from_addon_app_directory(self):
+        # Docker copies app/ to /opt/trend but executes /worker.py from /.
+        dockerfile = (ROOT / "trend_playlist_preview/Dockerfile").read_text()
+        worker = (ROOT / "trend_playlist_preview/worker.py").read_text()
+        self.assertIn("COPY app/ /opt/trend/", dockerfile)
+        self.assertIn('CMD ["python3", "/worker.py"]', dockerfile)
+        self.assertIn('ROOT = Path("/opt/trend")', worker)
+        self.assertIn('sys.path.insert(0, str(ROOT))', worker)
+        self.assertLess(worker.index('sys.path.insert(0, str(ROOT))'),
+                        worker.index('from playlist_snapshot import read_playlist'))
+
     def test_worker_route_is_authenticated_and_get_only(self):
         worker = (ROOT / "trend_playlist_preview/worker.py").read_text()
         get_section = worker.split("    def do_GET(self):", 1)[1].split("    def do_POST(self):", 1)[0]
