@@ -4,6 +4,7 @@ import logging
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .const import DOMAIN
+from .playlist_websocket import async_register_playlist_websocket
 from .panel_registration import async_register_trendee_panel, async_unregister_trendee_panel
 
 _LOGGER = logging.getLogger(__name__)
@@ -55,6 +56,7 @@ async def async_setup_entry(hass, entry):
         hass.data[DOMAIN + "_playlist"].pop(entry.entry_id, None)
         raise
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = (coordinator, session)
+    async_register_playlist_websocket(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     if len(hass.data[DOMAIN]) == 1:
         try:
