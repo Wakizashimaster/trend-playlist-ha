@@ -7,6 +7,7 @@ on:
       - "tests/test_playlist_snapshot.py"
       - "tests/test_trendee_playlist_contract.py"
       - "tests/test_trendee_playlist_websocket.py"
+      - "tests/test_trendee_preview_review_contract.py"
       - "trend_playlist_preview/**"
       - ".github/workflows/trendee-panel-checks.yml"
   workflow_dispatch:
@@ -33,5 +34,7 @@ jobs:
         run: python -m unittest discover -s tests -p test_trendee_playlist_contract.py -v
       - name: Offline playlist WebSocket behavior
         run: python -m unittest discover -s tests -p test_trendee_playlist_websocket.py -v
+      - name: Preview and review safety contract
+        run: python -m unittest discover -s tests -p test_trendee_preview_review_contract.py -v
       - name: Offline panel contract
         run: python -m unittest discover -s tests -p test_trendee_panel_contract.py -v

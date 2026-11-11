@@ -2,6 +2,25 @@
 
 All notable user-facing changes are recorded here. Releases follow semantic versioning where practical. The Home Assistant app and HACS integration should be updated together.
 
+## 0.5.0 — Trendee preview and review (development; not released)
+
+### Added
+- Run the existing dry-run preview from the Trendee sidebar using the Home Assistant button entity and authenticated service call.
+- Display proposed additions, removals, unchanged count, proposed track count, approval status and preflight status directly in the sidebar.
+- Disable preview initiation while a preview is already running; show progress and safe error feedback.
+- Escape proposed track metadata before rendering; no worker credentials exposed to the browser.
+- Automated preview/review safety contract tests.
+
+### Safety
+- No sidebar Approve or Publish controls. Running a preview never mutates the protected TIDAL playlist.
+- The 0.5.0 code is on a development branch only; do not install until reviewed, merged and explicitly approved.
+- Update the add-on and HACS integration together when approved.
+
+## 0.4.1 — Playlist import-path hotfix
+
+- Fix add-on worker imports for the read-only playlist endpoint.
+- Verify live TIDAL playlist count, artwork and links in Home Assistant.
+
 ## 0.4.0 — Trendee playlist view (development, not released)
 
 ### Added

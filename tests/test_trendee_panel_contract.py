@@ -7,12 +7,14 @@ JS = ROOT / "custom_components/trend_playlist/panel/trendee-panel.js"
 PY = ROOT / "custom_components/trend_playlist/panel_registration.py"
 
 class TestPanelContract(unittest.TestCase):
-    def test_read_only_panel(self):
+    def test_no_tidal_mutation_from_panel(self):
         text = JS.read_text(encoding="utf-8")
         self.assertIn('sensor.trend_playlist_preview', text)
         self.assertIn("this._hass", text)
         self.assertNotIn("fetch(", text)
-        self.assertNotIn("callService(", text)
+        self.assertIn('callService("button", "press", {entity_id: button[0]})', text)
+        self.assertIn('friendly_name === "Trend Playlist run preview"', text)
+        self.assertNotIn('callService("trend_playlist"', text)
         self.assertNotIn("publish_commit", text)
         self.assertNotIn("api_token", text)
         self.assertNotIn("tidalapi", text)
