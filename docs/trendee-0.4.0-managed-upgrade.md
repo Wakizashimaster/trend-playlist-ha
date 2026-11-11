@@ -11,6 +11,24 @@ Do not install a development-branch snapshot over a working Home Assistant insta
 - Never commit or export `api_token`, `tidal_session.json`, recovery files or other credentials.
 - Do not change the protected playlist in TIDAL while verifying the upgrade.
 
+## Home Assistant state and recorder review
+
+The playlist sensor's **state** is a numeric track count, not a JSON string,
+so it does not breach Home Assistant's 255-character *state* limit. The
+`tracks` list is instead stored in **attributes**. Those attributes are
+broadcast to connected Home Assistant frontends and may be recorded every
+time the sensor changes. The current implementation allows up to 500 tracks,
+which could create unnecessarily large state events and database rows.
+
+**Release decision: not yet approved.** Before releasing 0.4.0, move the
+full track list out of recorder-visible sensor attributes (prefer a
+Home Assistant-authenticated endpoint or equivalent frontend data channel).
+Keep the sensor state/attributes limited to a small summary: readiness,
+playlist identity, count and update/error metadata. Then test the dashboard
+with a real 50-track playlist, a failed TIDAL read and mobile navigation.
+Do not rely on users manually configuring recorder exclusions as the
+default solution.
+
 ## Release gates
 
 1. Confirm all automated checks pass for the final commit.
