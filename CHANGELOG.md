@@ -2,6 +2,22 @@
 
 All notable user-facing changes are recorded here. Releases follow semantic versioning where practical. The Home Assistant app and HACS integration should be updated together.
 
+## 0.4.0 — Trendee playlist view (development, not released)
+
+### Added
+- Read-only Trendee sidebar panel with existing worker/preview/publish status cards.
+- Searchable live TIDAL playlist view with track order, artist, album, artwork and TIDAL links.
+- Bearer-authenticated, read-only worker `GET /playlist` API, with protected playlist identity checks and a ten-minute Home Assistant refresh.
+- Home Assistant-authenticated `trendee/playlist` WebSocket command for the cached track list. Browser clients never receive the worker bearer token.
+- Summary-only playlist sensor to avoid storing track lists in Home Assistant recorder attributes.
+- Offline contract, WebSocket behavior, and playlist snapshot tests.
+
+### Upgrade and safety
+- **Not released or approved for live deployment.** The add-on and HACS integration must be upgraded together through their managed update mechanisms after release checks.
+- No new publishing action is provided by the Trendee panel; playlist viewing does not mutate TIDAL.
+- Home Assistant runtime, mobile, failed-authentication, and upgrade/rollback validation remain release gates.
+- Keep a Home Assistant backup including add-on data; do not use development branch files as an update.
+
 ## 0.3.0 — release candidate (not deployed)
 
 ### Added
