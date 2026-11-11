@@ -77,7 +77,7 @@ class WebSocketTests(unittest.TestCase):
 
     def test_unconfigured_returns_error(self):
         conn = Connection()
-        asyncio.run(self.module.websocket_playlist({"trend_playlist_playlist": {}}, conn, {"id": 7}))
+        asyncio.run(self.module.websocket_playlist(types.SimpleNamespace(data={"trend_playlist_playlist": {}}), conn, {"id": 7}))
         self.assertEqual(conn.results, [])
         self.assertEqual(conn.errors[0][:2], (7, "not_ready"))
 
@@ -85,7 +85,7 @@ class WebSocketTests(unittest.TestCase):
         conn = Connection()
         coordinator = types.SimpleNamespace(last_update_success=False, data={"tracks": ["stale"]})
         asyncio.run(self.module.websocket_playlist(
-            {"trend_playlist_playlist": {"entry": coordinator}}, conn, {"id": 8}))
+            types.SimpleNamespace(data={"trend_playlist_playlist": {"entry": coordinator}}), conn, {"id": 8}))
         self.assertEqual(conn.results, [])
         self.assertEqual(conn.errors[0][:2], (8, "unavailable"))
 
