@@ -99,7 +99,7 @@ class WebSocketTests(unittest.TestCase):
         }
         coordinator = types.SimpleNamespace(last_update_success=True, data=data)
         asyncio.run(self.module.websocket_playlist(
-            {"trend_playlist_playlist": {"entry": coordinator}}, conn, {"id": 9}))
+            types.SimpleNamespace(data={"trend_playlist_playlist": {"entry": coordinator}}), conn, {"id": 9}))
         self.assertEqual(conn.errors, [])
         self.assertEqual(conn.results, [(9, {
             "playlist_id": "id", "playlist_name": "name",
