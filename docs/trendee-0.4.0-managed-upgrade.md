@@ -20,12 +20,14 @@ broadcast to connected Home Assistant frontends and may be recorded every
 time the sensor changes. The current implementation allows up to 500 tracks,
 which could create unnecessarily large state events and database rows.
 
-**Release decision: not yet approved.** Before releasing 0.4.0, move the
-full track list out of recorder-visible sensor attributes (prefer a
-Home Assistant-authenticated endpoint or equivalent frontend data channel).
-Keep the sensor state/attributes limited to a small summary: readiness,
-playlist identity, count and update/error metadata. Then test the dashboard
-with a real 50-track playlist, a failed TIDAL read and mobile navigation.
+**Implemented on the development branch:** the sensor now exposes only
+readiness, playlist identity and count. The full cached track list is returned
+only through the Home Assistant-authenticated `trendee/playlist` WebSocket
+command, without exposing worker credentials to the browser.
+
+**Release decision: not yet approved.** Offline syntax and contract tests
+are necessary but not sufficient: test the dashboard with a real 50-track
+playlist, a failed TIDAL read, Home Assistant recorder, and mobile navigation.
 Do not rely on users manually configuring recorder exclusions as the
 default solution.
 
