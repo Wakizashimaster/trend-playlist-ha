@@ -100,6 +100,7 @@ class TrendeePanel extends HTMLElement {
       this.render();
       return;
     }
+    if (option === "Block from future proposals" && !window.confirm("Permanently block this song from future proposals? This changes the saved blocklist immediately, but does not change TIDAL.")) { this.render(); return; }
     this._cancelPublishConfirmation();
     await this._serviceChoice(entity[0], option);
   }
