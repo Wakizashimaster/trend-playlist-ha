@@ -55,6 +55,7 @@ class TrendeePanel extends HTMLElement {
       this.render();
       return;
     }
+    this._cancelPublishConfirmation();
     this._previewPending = true;
     this._previewFeedback = "Starting preview…";
     this.render();
@@ -99,6 +100,7 @@ class TrendeePanel extends HTMLElement {
       this.render();
       return;
     }
+    this._cancelPublishConfirmation();
     await this._serviceChoice(entity[0], option);
   }
   async _serviceChoice(entityId, option) {
@@ -245,6 +247,13 @@ class TrendeePanel extends HTMLElement {
             </div>
             <p>Approval: ${review.approval_recorded ? "recorded" : "not recorded"} · Publish safety check: ${review.publish_preflight_passed ? "passed" : "not passed"}</p>
             <p>Revised plan: ${esc(review.revised_count ?? "?")} tracks · ${esc((review.revised_additions || []).length)} additions · ${esc((review.revised_removals || []).length)} removals · ${esc(review.replacement_count ?? 0)} reserve replacements.</p>
+            <details><summary>Inspect final proposed changes before approval or publishing</summary>
+              <div class="changes">
+                <div><h3>Final additions</h3><ul>${(review.revised_additions || []).map(t => "<li>" + esc(t.title || t.tidal_id) + " · " + esc(t.artist || "") + "</li>").join("")}</ul></div>
+                <div><h3>Final removals</h3><ul>${(review.revised_removals || []).map(t => "<li>" + esc(t.title || t.tidal_id) + " · " + esc(t.artist || "") + "</li>").join("")}</ul></div>
+              </div>
+            </details>
+            <p class="warning">“Block from future proposals” permanently updates the song blocklist immediately. Other review decisions only change this proposal.</p>
             <div class="controls">
               <button type="button" class="action approve-reviewed" ${this._actionPending || !this._entity("button", "Trend Playlist Approve reviewed proposal") ? "disabled" : ""}>Approve reviewed proposal</button>
               <button type="button" class="action approve-all" ${this._actionPending || Object.keys(decisions).length || !this._entity("button", "Trend Playlist Approve Everything") ? "disabled" : ""}>Approve everything</button>
