@@ -2,6 +2,17 @@
 
 All notable user-facing changes are recorded here. Releases follow semantic versioning where practical. The Home Assistant app and HACS integration should be updated together.
 
+## 0.6.0 — Full sidebar review and publishing controls (development; not released)
+
+- Individual addition choices: Keep, Exclude this week, Promote to Zeitgeist, Block from future proposals.
+- Individual removal choices: Remove as proposed or Retain in playlist.
+- Review decisions use existing Home Assistant select entities; permanent block requires an additional confirmation.
+- Show final revised additions/removals, replacement count, and approval status before committing.
+- Approve reviewed proposal, Approve Everything, and read-only publish safety preflight.
+- Publish is disabled until approval and preflight succeed, and requires a separate typed final confirmation bound to the exact proposal ID and plan hash.
+- Browser never receives the worker token. Existing Home Assistant service entities and server-side proposal checks remain authoritative.
+- **Development only**: no live TIDAL changes, Home Assistant reloads, merges or releases as part of this branch.
+
 ## 0.5.0 — Trendee preview and review (development; not released)
 
 ### Added
