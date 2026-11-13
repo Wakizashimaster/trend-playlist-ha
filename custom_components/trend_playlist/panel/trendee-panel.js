@@ -247,7 +247,7 @@ class TrendeePanel extends HTMLElement {
               <div><h3>Removals (${removals.length})</h3>${removals.length ? "<ul>" + removals.map(t => choice(t, "removal")).join("") + "</ul>" : "<p>None</p>"}</div>
             </div>
             <p>Approval: ${review.approval_recorded ? "recorded" : "not recorded"} · Publish safety check: ${review.publish_preflight_passed ? "passed" : "not passed"}</p>
-            <p>Revised plan: ${esc(review.revised_count ?? "?")} tracks · ${esc((review.revised_additions || []).length)} additions · ${esc((review.revised_removals || []).length)} removals · ${esc(review.replacement_count ?? 0)} reserve replacements.</p>
+            <p>Revised plan: ${esc(review.revised_count ?? "?")} tracks · ${esc((review.revised_additions || []).length)} additions · ${esc((review.revised_removals || []).length)} removals · ${esc(review.retained_count ?? 0)} retained tracks · ${esc(review.replacement_count ?? 0)} new reserve selections.</p>
             <details><summary>Inspect final proposed changes before approval or publishing</summary>
               <div class="changes">
                 <div><h3>Final additions</h3><ul>${(review.revised_additions || []).map(t => "<li>" + esc(t.title || t.tidal_id) + " · " + esc(t.artist || "") + "</li>").join("")}</ul></div>
