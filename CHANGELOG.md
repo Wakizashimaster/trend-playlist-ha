@@ -2,6 +2,13 @@
 
 All notable user-facing changes are recorded here. Releases follow semantic versioning where practical. The Home Assistant app and HACS integration should be updated together.
 
+## 0.6.1 — Review count reporting correction
+
+- Distinguish retained existing playlist tracks from new reserve selections in the revised-plan summary.
+- Correct the reserve counter so retained tracks are not mistaken for new replacements.
+- No changes to playlist selection, approval, publishing or TIDAL data.
+- Update the Home Assistant add-on and HACS integration together.
+
 ## 0.6.0 — Full sidebar review and publishing controls (development; not released)
 
 - Individual addition choices: Keep, Exclude this week, Promote to Zeitgeist, Block from future proposals.
